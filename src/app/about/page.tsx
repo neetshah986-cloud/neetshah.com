@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
-import { Avatar, LinkedInLink } from "@/components/Person";
+import Image from "next/image";
+import { LinkedInLink } from "@/components/Person";
 import { person, personJsonLd, site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "Neet Shah has worked in SEO since 2022 at Infidigit, Incubeta and Jellyfish, and builds free technical SEO tools and guides at SEO People Hub.",
   alternates: { canonical: "/about" },
-  openGraph: { type: "profile", title: "About Neet Shah", images: [person.photo] },
+  openGraph: { type: "profile", title: "About Neet Shah", images: [person.portrait] },
 };
 
 // Career in order, newest first. No job titles, by Neet's choice.
@@ -71,17 +72,12 @@ export default function About() {
       />
 
       <section className="container-x pt-16 sm:pt-24">
-        <div className="grid items-end gap-10 lg:grid-cols-[auto_1fr] lg:gap-14">
-          <Avatar size={160} className="h-32 w-32 sm:h-40 sm:w-40" />
+        <div className="grid gap-12 lg:grid-cols-[1.35fr_1fr] lg:gap-20">
           <div>
             <h1 className="display text-5xl sm:text-7xl">{person.name}</h1>
             <p className="mt-4 text-xl text-ink-soft">{person.tagline}</p>
-          </div>
-        </div>
 
-        <div className="mt-14 grid gap-14 lg:grid-cols-[1.5fr_1fr] lg:gap-20">
-          <div>
-            <div className="prose-post">
+            <div className="prose-post mt-10">
               <p>
                 I&apos;m Neet Shah. I&apos;ve worked in SEO since 2022, first at Infidigit in Mumbai, then at
                 Incubeta in Dubai, and now at Jellyfish. Along the way I&apos;ve worked on sites in automotive,
@@ -108,18 +104,31 @@ export default function About() {
             </div>
           </div>
 
-          <aside aria-labelledby="highlights-heading">
-            <h2 id="highlights-heading" className="font-semibold">Highlights</h2>
-            <dl className="mt-4 divide-y divide-rule border-y border-rule">
-              {highlights.map((h) => (
-                <div key={h.label} className="grid grid-cols-[5.5rem_1fr] items-baseline gap-4 py-4">
-                  <dt className="text-2xl font-semibold tracking-tight">{h.figure}</dt>
-                  <dd className="leading-snug text-ink-soft">{h.label}</dd>
-                </div>
-              ))}
-            </dl>
-          </aside>
+          <figure className="order-first mx-auto w-full max-w-sm lg:order-none lg:max-w-none lg:pt-2">
+            <Image
+              src={person.portrait}
+              alt="Neet Shah at Key Monastery in Spiti Valley"
+              width={960}
+              height={1200}
+              priority
+              unoptimized
+              className="aspect-[4/5] w-full rounded-2xl bg-mist object-cover"
+            />
+            <figcaption className="mt-3 text-sm text-ink-soft">Spiti Valley, Himachal Pradesh</figcaption>
+          </figure>
         </div>
+
+        <section aria-labelledby="highlights-heading" className="mt-20">
+          <h2 id="highlights-heading" className="sr-only">Highlights</h2>
+          <dl className="grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
+            {highlights.map((h) => (
+              <div key={h.label} className="bg-paper p-6">
+                <dt className="text-3xl font-semibold tracking-tight">{h.figure}</dt>
+                <dd className="mt-2 leading-snug text-ink-soft">{h.label}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </section>
 
       <section aria-labelledby="career-heading" className="container-x mt-28">

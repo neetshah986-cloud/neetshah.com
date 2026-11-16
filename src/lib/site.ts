@@ -4,6 +4,7 @@ export const person = {
   // Shown under his name instead of a job title. SEO career started March 2022.
   tagline: "4+ years in SEO, now at Jellyfish",
   photo: "/neet-shah.jpg",
+  portrait: "/neet-shah-portrait.jpg",
   linkedin: "https://www.linkedin.com/in/neet-shah-424805231/",
   id: "https://neetshah.com/#neet-shah",
   employer: { name: "Jellyfish", url: "https://www.jellyfish.com" },
@@ -41,7 +42,7 @@ export const personJsonLd = {
   "@id": person.id,
   name: person.name,
   url: `${site.url}/about`,
-  image: `${site.url}${person.photo}`,
+  image: `${site.url}${person.portrait}`,
   sameAs: [person.linkedin],
   worksFor: { "@type": "Organization", name: person.employer.name, url: person.employer.url },
   alumniOf: { "@type": "CollegeOrUniversity", name: "University of Mumbai" },

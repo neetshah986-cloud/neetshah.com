@@ -5,7 +5,7 @@ date: "2026-11-16"
 tags: ["announcements"]
 ---
 
-I'm Neet Shah, an SEO specialist, and SEO People Hub is my free set of tools and guides for people who do SEO for a living, or who are learning to.
+I'm Neet Shah. I've worked in SEO since 2022, and SEO People Hub is my free set of tools and guides for people who do SEO for a living, or who are learning to.
 
 ## What's coming first
 

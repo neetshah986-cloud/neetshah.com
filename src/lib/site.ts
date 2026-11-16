@@ -1,11 +1,17 @@
+// Neet's own details. Deliberately no job titles anywhere on the site (his request).
 export const person = {
   name: "Neet Shah",
-  role: "SEO Specialist",
+  // Shown under his name instead of a job title. SEO career started March 2022.
+  tagline: "4+ years in SEO, now at Jellyfish",
+  photo: "/neet-shah.jpg",
   linkedin: "https://www.linkedin.com/in/neet-shah-424805231/",
   id: "https://neetshah.com/#neet-shah",
+  employer: { name: "Jellyfish", url: "https://www.jellyfish.com" },
   knowsAbout: [
     "Search engine optimization",
     "Technical SEO",
+    "International SEO",
+    "Arabic SEO",
     "Core Web Vitals",
     "Structured data",
     "JavaScript SEO",
@@ -35,7 +41,10 @@ export const personJsonLd = {
   "@id": person.id,
   name: person.name,
   url: `${site.url}/about`,
-  jobTitle: person.role,
+  image: `${site.url}${person.photo}`,
   sameAs: [person.linkedin],
+  worksFor: { "@type": "Organization", name: person.employer.name, url: person.employer.url },
+  alumniOf: { "@type": "CollegeOrUniversity", name: "University of Mumbai" },
+  award: "Rising Star Award, Infidigit (2024)",
   knowsAbout: person.knowsAbout,
 };

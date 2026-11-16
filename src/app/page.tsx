@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { HeroAudit } from "@/components/HeroAudit";
 import { JsonLd } from "@/components/JsonLd";
-import { Byline, Initials } from "@/components/Person";
+import { Avatar, Byline } from "@/components/Person";
 import { PostList } from "@/components/PostList";
 import { ToolList } from "@/components/ToolList";
 import { getAllPosts } from "@/lib/blog";
@@ -108,16 +108,16 @@ export default function Home() {
         className="container-x mt-32"
       >
         <div className="grid gap-10 rounded-2xl bg-ink p-8 text-paper sm:p-12 lg:grid-cols-[auto_1fr] lg:gap-14">
-          <Initials light className="h-24 w-24 text-3xl" />
+          <Avatar size={112} className="ring-4 ring-white/10" />
           <div>
             <h2 id="neet-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Hi, I&apos;m {person.name}.
             </h2>
             <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[#C8D2E1]">
-              I&apos;m an SEO specialist, and I build the tools on this site because I use these checks every day:
-              how a page renders without JavaScript, whether its structured data is valid, and what is slowing it
-              down. {site.hub} is where I share them, free, along with guides that explain the reasoning behind
-              each result.
+              I&apos;ve worked in SEO since 2022, at Infidigit in Mumbai, Incubeta in Dubai and now Jellyfish,
+              on sites in automotive, healthcare, insurance and energy across India and the Middle East. I build
+              the tools on this site because I run these checks every day, and {site.hub} is where I share them
+              free, with guides that explain the reasoning behind each result.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
               <Link href="/about" className="rounded-lg bg-paper px-5 py-3 font-medium text-ink hover:bg-white">

@@ -82,7 +82,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 {site.name}
               </Link>
               <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
-                {person.role} building {site.hub}: free technical SEO tools and guides, no sign-up.
+                {site.hub} is where {person.name} shares free technical SEO tools and guides. No sign-up.
               </p>
               <LinkedInLink className="mt-5 text-[0.95rem]" />
             </div>

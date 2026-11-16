@@ -5,7 +5,7 @@ import { Initials, LinkedInLink } from "@/components/Person";
 import { person, personJsonLd, site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "About Neet Shah, SEO Specialist",
+  title: { absolute: "Neet Shah, SEO Specialist | SEO People Hub" },
   description:
     "Neet Shah is an SEO specialist building free technical SEO tools and guides for page speed, structured data and JavaScript rendering.",
   alternates: { canonical: "/about" },

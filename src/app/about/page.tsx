@@ -31,7 +31,7 @@ const career = [
     years: "2022 to 2024",
     company: "Infidigit",
     place: "Mumbai",
-    body: "On-page and technical SEO, site audits and reporting for clients across industries. Led a team on an automotive project that went on to win 6+ industry awards, and built proposals that helped win two major life insurance clients.",
+    body: "On-page and technical SEO, site audits and reporting for clients across industries. Led the team on a major automotive project, and built proposals that helped win two major life insurance clients.",
   },
   {
     years: "2020 to 2021",
@@ -39,13 +39,6 @@ const career = [
     place: "",
     body: "Where it started: building the business's online sales through Facebook and Instagram.",
   },
-];
-
-const highlights = [
-  { figure: "+150%", label: "Non-brand clicks for a client, from 6,000 to 15,000+" },
-  { figure: "6,000+", label: "Keywords optimised in a single engagement" },
-  { figure: "6+", label: "Industry awards won by a project I worked on" },
-  { figure: "2024", label: "Rising Star Award at Infidigit" },
 ];
 
 const toolkit = [
@@ -117,18 +110,6 @@ export default function About() {
             <figcaption className="mt-3 text-sm text-ink-soft">Spiti Valley, Himachal Pradesh</figcaption>
           </figure>
         </div>
-
-        <section aria-labelledby="highlights-heading" className="mt-20">
-          <h2 id="highlights-heading" className="sr-only">Highlights</h2>
-          <dl className="grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
-            {highlights.map((h) => (
-              <div key={h.label} className="bg-paper p-6">
-                <dt className="text-3xl font-semibold tracking-tight">{h.figure}</dt>
-                <dd className="mt-2 leading-snug text-ink-soft">{h.label}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
       </section>
 
       <section aria-labelledby="career-heading" className="container-x mt-28">

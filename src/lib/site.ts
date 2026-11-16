@@ -46,6 +46,5 @@ export const personJsonLd = {
   sameAs: [person.linkedin],
   worksFor: { "@type": "Organization", name: person.employer.name, url: person.employer.url },
   alumniOf: { "@type": "CollegeOrUniversity", name: "University of Mumbai" },
-  award: "Rising Star Award, Infidigit (2024)",
   knowsAbout: person.knowsAbout,
 };

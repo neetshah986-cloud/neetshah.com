@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { HeroAudit } from "@/components/HeroAudit";
 import { JsonLd } from "@/components/JsonLd";
+import { Byline, Initials } from "@/components/Person";
 import { PostList } from "@/components/PostList";
 import { ToolList } from "@/components/ToolList";
 import { getAllPosts } from "@/lib/blog";
-import { site } from "@/lib/site";
+import { person, personJsonLd, site } from "@/lib/site";
 import { tools } from "@/lib/tools";
 
 const principles = [
@@ -30,11 +31,19 @@ export default function Home() {
       <JsonLd
         data={{
           "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: site.name,
-          url: site.url,
-          description: site.description,
-          author: { "@type": "Person", name: site.author },
+          "@graph": [
+            {
+              "@type": "WebSite",
+              "@id": `${site.url}/#website`,
+              name: site.name,
+              alternateName: site.hub,
+              url: site.url,
+              description: site.description,
+              author: { "@id": person.id },
+              publisher: { "@id": person.id },
+            },
+            personJsonLd,
+          ],
         }}
       />
 
@@ -44,8 +53,8 @@ export default function Home() {
             See your pages the way search engines do.
           </h1>
           <p className="mt-7 max-w-[34rem] text-lg leading-relaxed text-ink-soft sm:text-xl">
-            Free technical SEO tools for page speed, structured data and JavaScript rendering, built by an
-            SEO practitioner for people who fix sites for a living.
+            Free technical SEO tools for page speed, structured data and JavaScript rendering, built by Neet
+            Shah for people who fix sites for a living.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
             <Link
@@ -60,6 +69,9 @@ export default function Home() {
             >
               Read the guides
             </Link>
+          </div>
+          <div className="mt-12 border-t border-rule pt-6">
+            <Byline />
           </div>
         </div>
         <HeroAudit />
@@ -89,6 +101,39 @@ export default function Home() {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section
+        aria-labelledby="neet-heading"
+        className="container-x mt-32"
+      >
+        <div className="grid gap-10 rounded-2xl bg-ink p-8 text-paper sm:p-12 lg:grid-cols-[auto_1fr] lg:gap-14">
+          <Initials light className="h-24 w-24 text-3xl" />
+          <div>
+            <h2 id="neet-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              Hi, I&apos;m {person.name}.
+            </h2>
+            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[#C8D2E1]">
+              I&apos;m an SEO specialist, and I build the tools on this site because I use these checks every day:
+              how a page renders without JavaScript, whether its structured data is valid, and what is slowing it
+              down. {site.hub} is where I share them, free, along with guides that explain the reasoning behind
+              each result.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
+              <Link href="/about" className="rounded-lg bg-paper px-5 py-3 font-medium text-ink hover:bg-white">
+                More about me
+              </Link>
+              <a
+                href={person.linkedin}
+                target="_blank"
+                rel="me noopener"
+                className="font-medium text-[#A9BBFF] hover:underline"
+              >
+                Connect on LinkedIn
+              </a>
+            </div>
+          </div>
+        </div>
       </section>
 
       {posts.length > 0 && (

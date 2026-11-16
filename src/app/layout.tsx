@@ -4,7 +4,8 @@ import "@fontsource-variable/schibsted-grotesk";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import { LogoMark } from "@/components/Logo";
-import { nav, site } from "@/lib/site";
+import { LinkedInLink } from "@/components/Person";
+import { nav, person, site } from "@/lib/site";
 import { tools } from "@/lib/tools";
 import "./globals.css";
 
@@ -13,7 +14,8 @@ export const metadata: Metadata = {
   title: { default: site.homeTitle, template: `%s | ${site.name}` },
   description: site.description,
   applicationName: site.name,
-  authors: [{ name: site.author }],
+  authors: [{ name: person.name, url: person.linkedin }],
+  creator: person.name,
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
@@ -42,18 +44,26 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
         <header className="sticky top-0 z-40 border-b border-rule/80 bg-paper/85 backdrop-blur-md">
           <div className="container-x flex h-16 items-center justify-between gap-6">
-            <Link href="/" className="flex items-center gap-2.5 text-[1.05rem] font-semibold tracking-tight">
+            <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap text-[1.05rem] font-semibold tracking-tight">
               <LogoMark />
-              <span className="hidden sm:inline">{site.name}</span>
+              <span>{site.name}</span>
+              <span className="hidden border-l border-rule pl-2.5 font-normal text-ink-soft md:inline">{site.hub}</span>
             </Link>
             <nav aria-label="Main" className="flex items-center gap-1 text-[0.95rem]">
               {nav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="rounded-md px-3 py-2 text-ink-soft transition-colors hover:bg-mist hover:text-ink"
+                  className="whitespace-nowrap rounded-md px-2.5 py-2 text-ink-soft transition-colors hover:bg-mist hover:text-ink sm:px-3"
                 >
-                  {item.label}
+                  {item.short ? (
+                    <>
+                      <span className="sm:hidden">{item.short}</span>
+                      <span className="hidden sm:inline">{item.label}</span>
+                    </>
+                  ) : (
+                    item.label
+                  )}
                 </Link>
               ))}
             </nav>
@@ -72,8 +82,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 {site.name}
               </Link>
               <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">
-                Technical SEO tools and guides by {site.author}. Free to use, no sign-up.
+                {person.role} building {site.hub}: free technical SEO tools and guides, no sign-up.
               </p>
+              <LinkedInLink className="mt-5 text-[0.95rem]" />
             </div>
             <nav aria-label="Tools">
               <h2 className="text-sm font-semibold">Tools</h2>
@@ -89,13 +100,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <h2 className="text-sm font-semibold">Site</h2>
               <ul className="mt-4 space-y-2.5 text-[0.95rem] text-ink-soft">
                 <li><Link href="/blog" className="hover:text-ink">Guides</Link></li>
-                <li><Link href="/about" className="hover:text-ink">About</Link></li>
+                <li><Link href="/about" className="hover:text-ink">About Neet</Link></li>
                 <li><a href="/sitemap.xml" className="hover:text-ink">Sitemap</a></li>
               </ul>
             </nav>
           </div>
           <div className="container-x border-t border-rule py-6 text-sm text-ink-soft">
-            © 2026 {site.name}
+            © 2026 {person.name}. {site.hub}.
           </div>
         </footer>
       </body>

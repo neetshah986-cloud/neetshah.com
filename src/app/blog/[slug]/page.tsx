@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/JsonLd";
 import { formatDate, getAllPosts, getPost } from "@/lib/blog";
-import { site } from "@/lib/site";
+import { Byline } from "@/components/Person";
+import { person, personJsonLd, site } from "@/lib/site";
 
 export function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));
@@ -36,8 +37,8 @@ export default async function BlogPost({ params }: PageProps<"/blog/[slug]">) {
           headline: meta.title,
           description: meta.description,
           datePublished: meta.date,
-          author: { "@type": "Person", name: site.author },
-          publisher: { "@type": "Organization", name: site.name },
+          author: personJsonLd,
+          publisher: { "@id": person.id },
           mainEntityOfPage: `${site.url}/blog/${slug}`,
         }}
       />
@@ -48,11 +49,14 @@ export default async function BlogPost({ params }: PageProps<"/blog/[slug]">) {
         <h1 className="display text-[2.6rem] sm:text-6xl">{meta.title}</h1>
         <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">{meta.description}</p>
         <p className="mt-8 flex flex-wrap gap-x-6 gap-y-1 border-t border-rule pt-5 text-sm text-ink-soft">
-          <span>By {site.author}</span>
+          <span>By <Link href="/about" className="font-medium text-ink hover:text-serp">{person.name}</Link></span>
           <time dateTime={meta.date}>{formatDate(meta.date)}</time>
         </p>
       </header>
       <div className="prose-post mt-12" dangerouslySetInnerHTML={{ __html: html }} />
+      <footer className="mt-16 max-w-[68ch] border-t border-rule pt-8">
+        <Byline verb="Written by" />
+      </footer>
     </article>
   );
 }

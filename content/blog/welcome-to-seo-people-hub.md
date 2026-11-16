@@ -1,11 +1,11 @@
 ---
 title: "Welcome to SEO People Hub"
-description: "What this hub is for, which SEO tools are coming first, and how to get the most out of them."
+description: "Why I built SEO People Hub, which technical SEO tools are coming first, and how to get the most out of them."
 date: "2026-11-16"
 tags: ["announcements"]
 ---
 
-SEO People Hub is a free set of tools and guides for people who do SEO for a living, or who are learning to.
+I'm Neet Shah, an SEO specialist, and SEO People Hub is my free set of tools and guides for people who do SEO for a living, or who are learning to.
 
 ## What's coming first
 

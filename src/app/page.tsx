@@ -1,9 +1,26 @@
 import Link from "next/link";
+import { HeroAudit } from "@/components/HeroAudit";
 import { JsonLd } from "@/components/JsonLd";
-import { ToolCard } from "@/components/ToolCard";
-import { formatDate, getAllPosts } from "@/lib/blog";
+import { PostList } from "@/components/PostList";
+import { ToolList } from "@/components/ToolList";
+import { getAllPosts } from "@/lib/blog";
 import { site } from "@/lib/site";
 import { tools } from "@/lib/tools";
+
+const principles = [
+  {
+    title: "Raw HTML first",
+    body: "Every check starts with the HTML your server sends, because that is what a crawler reads before it renders anything.",
+  },
+  {
+    title: "Every result explained",
+    body: "Each finding says what it means for crawling, indexing or ranking, and exactly what to change.",
+  },
+  {
+    title: "Built for daily use",
+    body: "No account and no paywall. Open a tool, paste a URL, get an answer you can send to a developer.",
+  },
+];
 
 export default function Home() {
   const posts = getAllPosts().slice(0, 3);
@@ -21,50 +38,70 @@ export default function Home() {
         }}
       />
 
-      <section className="container-x pt-20 pb-16">
-        <p className="mb-4 text-sm font-medium text-accent">For SEO professionals</p>
-        <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Free SEO tools to test speed, schema and rendering.
-        </h1>
-        <p className="mt-5 max-w-2xl text-lg text-muted">{site.description}</p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/tools" className="rounded-lg bg-accent px-5 py-2.5 font-medium text-white hover:opacity-90">
-            Browse tools
-          </Link>
-          <Link href="/blog" className="rounded-lg border border-line px-5 py-2.5 font-medium hover:border-accent">
-            Read the blog
-          </Link>
+      <section className="container-x grid items-center gap-14 pt-16 pb-24 sm:pt-24 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
+        <div>
+          <h1 className="display max-w-[12ch] text-[3.1rem] sm:text-[4.4rem] lg:text-[5.1rem]">
+            See your pages the way search engines do.
+          </h1>
+          <p className="mt-7 max-w-[34rem] text-lg leading-relaxed text-ink-soft sm:text-xl">
+            Free technical SEO tools for page speed, structured data and JavaScript rendering, built by an
+            SEO practitioner for people who fix sites for a living.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-3">
+            <Link
+              href="/tools"
+              className="rounded-lg bg-ink px-5 py-3 font-medium text-paper transition-colors hover:bg-serp"
+            >
+              Browse the tools
+            </Link>
+            <Link
+              href="/blog"
+              className="rounded-lg border border-rule bg-white px-5 py-3 font-medium transition-colors hover:border-ink"
+            >
+              Read the guides
+            </Link>
+          </div>
         </div>
+        <HeroAudit />
       </section>
 
-      <section className="container-x" aria-labelledby="tools-heading">
-        <div className="mb-6 flex items-end justify-between">
-          <h2 id="tools-heading" className="text-2xl font-semibold">Tools</h2>
-          <Link href="/tools" className="text-sm text-accent hover:underline">All tools →</Link>
+      <section aria-labelledby="tools-heading" className="container-x">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+          <h2 id="tools-heading" className="max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
+            Six tools for the checks that decide rankings
+          </h2>
+          <Link href="/tools" className="font-medium text-serp hover:underline">
+            All tools
+          </Link>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {tools.map((tool) => (
-            <ToolCard key={tool.slug} tool={tool} />
+        <ToolList tools={tools} />
+      </section>
+
+      <section aria-labelledby="approach-heading" className="container-x mt-32 grid gap-12 lg:grid-cols-[1fr_1.6fr]">
+        <h2 id="approach-heading" className="max-w-sm text-3xl font-semibold tracking-tight sm:text-4xl">
+          How the tools work
+        </h2>
+        <dl className="grid gap-10 sm:grid-cols-3 sm:gap-8">
+          {principles.map((p) => (
+            <div key={p.title} className="border-t-2 border-ink pt-5">
+              <dt className="text-lg font-semibold tracking-tight">{p.title}</dt>
+              <dd className="mt-2 leading-relaxed text-ink-soft">{p.body}</dd>
+            </div>
           ))}
-        </div>
+        </dl>
       </section>
 
       {posts.length > 0 && (
-        <section className="container-x mt-20" aria-labelledby="blog-heading">
-          <div className="mb-6 flex items-end justify-between">
-            <h2 id="blog-heading" className="text-2xl font-semibold">Latest from the blog</h2>
-            <Link href="/blog" className="text-sm text-accent hover:underline">All posts →</Link>
+        <section aria-labelledby="guides-heading" className="container-x mt-32">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <h2 id="guides-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              Latest guides
+            </h2>
+            <Link href="/blog" className="font-medium text-serp hover:underline">
+              All guides
+            </Link>
           </div>
-          <ul className="divide-y divide-line border-y border-line">
-            {posts.map((p) => (
-              <li key={p.slug} className="py-4">
-                <Link href={`/blog/${p.slug}`} className="font-medium hover:text-accent">{p.title}</Link>
-                <p className="mt-1 text-sm text-muted">
-                  {formatDate(p.date)} · {p.description}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <PostList posts={posts} />
         </section>
       )}
     </>

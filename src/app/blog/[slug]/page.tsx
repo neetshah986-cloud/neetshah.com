@@ -28,7 +28,7 @@ export default async function BlogPost({ params }: PageProps<"/blog/[slug]">) {
   const { meta, html } = post;
 
   return (
-    <article className="container-x max-w-3xl pt-16">
+    <article className="container-x pt-12 sm:pt-16">
       <JsonLd
         data={{
           "@context": "https://schema.org",
@@ -41,14 +41,18 @@ export default async function BlogPost({ params }: PageProps<"/blog/[slug]">) {
           mainEntityOfPage: `${site.url}/blog/${slug}`,
         }}
       />
-      <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted">
-        <Link href="/blog" className="hover:text-foreground">Blog</Link>
+      <nav aria-label="Breadcrumb" className="text-sm text-ink-soft">
+        <Link href="/blog" className="hover:text-ink">Guides</Link>
       </nav>
-      <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{meta.title}</h1>
-      <p className="mt-3 text-sm text-muted">
-        <time dateTime={meta.date}>{formatDate(meta.date)}</time> · {site.author}
-      </p>
-      <div className="prose-post mt-10" dangerouslySetInnerHTML={{ __html: html }} />
+      <header className="mt-10 max-w-4xl">
+        <h1 className="display text-[2.6rem] sm:text-6xl">{meta.title}</h1>
+        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">{meta.description}</p>
+        <p className="mt-8 flex flex-wrap gap-x-6 gap-y-1 border-t border-rule pt-5 text-sm text-ink-soft">
+          <span>By {site.author}</span>
+          <time dateTime={meta.date}>{formatDate(meta.date)}</time>
+        </p>
+      </header>
+      <div className="prose-post mt-12" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
 }

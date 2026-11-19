@@ -22,14 +22,20 @@ export function analyse(html: string, source: Report["source"]): Report {
           ? "This page looks like it adds content with JavaScript (Google Tag Manager or a client-side app). This tool reads the raw HTML your server sends. If your schema is injected by JavaScript, Google may still see it after rendering, but adding it to the server HTML is more reliable."
           : "Add JSON-LD in a <script type=\"application/ld+json\"> tag, or check that the URL is the page you meant.",
     });
-  } else if (source.kind === "url" && x.hints.usesTagManager) {
-    issues.push({
-      severity: "info",
-      code: "gtm",
-      message: "This page loads Google Tag Manager.",
-      hint: "Only structured data in the raw HTML is shown here. Any schema that Tag Manager injects with JavaScript isn't included.",
-    });
   }
+
+  const content = x.pageText !== null ? contentChecks(topLevel, x.items, x.pageText, x.scriptText ?? "") : null;
+  const rendering =
+    x.pageText !== null
+      ? {
+          schemaInServerHtml: topLevel.length > 0,
+          jsCreatesSchema: x.hints.jsCreatesSchema,
+          tagManager: x.hints.usesTagManager,
+          emptyAppShell: x.hints.isJsApp,
+          csrValues: content?.filter((c) => c.where === "js").length ?? 0,
+          framework: x.hints.framework,
+        }
+      : null;
 
   const counts = {
     items: Object.keys(x.items).length,
@@ -45,8 +51,9 @@ export function analyse(html: string, source: Report["source"]): Report {
     items: x.items,
     issues,
     richResults: richResults(topLevel, x.items),
-    content: x.pageText !== null ? contentChecks(topLevel, x.items, x.pageText, x.scriptText ?? "") : null,
+    content,
     graph: v.graph,
+    rendering,
     counts,
   };
 }

@@ -284,7 +284,7 @@ export type Extraction = {
   issues: Issue[];
   pageText: string | null;
   scriptText: string | null; // text of non-JSON-LD scripts, where client-side apps keep their content
-  hints: { usesTagManager: boolean; isJsApp: boolean };
+  hints: { usesTagManager: boolean; isJsApp: boolean; jsCreatesSchema: boolean; framework?: string };
 };
 
 export function extract(input: string, opts: { isFullPage: boolean }): Extraction {
@@ -305,6 +305,7 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
 
   let pageText: string | null = null;
   let scriptText: string | null = null;
+  let jsCreatesSchema = false;
   if (opts.isFullPage) {
     const parts: string[] = [];
     let size = 0;
@@ -312,6 +313,7 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
       const type = ($(el).attr("type") ?? "").toLowerCase();
       if (type === "application/ld+json" || $(el).attr("src")) return;
       const t = $(el).text();
+      if (/application\/ld\+json/i.test(t) && /createElement\(\s*["'`]script["'`]\s*\)/.test(t)) jsCreatesSchema = true;
       if (size + t.length > 8_000_000) return;
       size += t.length;
       parts.push(t);
@@ -329,8 +331,23 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
     pageText,
     scriptText,
     hints: {
-      usesTagManager: /googletagmanager\.com\/gtm\.js|GTM-[A-Z0-9]+/.test(input),
+      usesTagManager: /googletagmanager\.com\/gtm\.js|GTM-[A-Z0-9]{4,}/.test(input),
       isJsApp: /<div id="(root|app|__next|__nuxt)"[^>]*>\s*<\/div>/.test(input),
+      // Inline JavaScript that writes JSON-LD into the page at runtime.
+      jsCreatesSchema,
+      framework: /__NEXT_DATA__|\/_next\/static\//.test(input)
+        ? "Next.js"
+        : /window\.__NUXT__|\/_nuxt\//.test(input)
+          ? "Nuxt"
+          : /ng-version=/.test(input)
+            ? "Angular"
+            : /data-reactroot|react-dom|__REACT|data-react-helmet/.test(input)
+              ? "React"
+              : /wp-content\//.test(input)
+                ? "WordPress"
+                : /cdn\.shopify\.com/.test(input)
+                  ? "Shopify"
+                  : undefined,
     },
   };
 }

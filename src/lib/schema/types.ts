@@ -59,6 +59,15 @@ export type ContentCheck = {
 export type GraphNode = { id: string; item: string; types: string[] };
 export type GraphEdge = { from: string; to: string; prop: string; resolved: boolean };
 
+export type Rendering = {
+  schemaInServerHtml: boolean; // structured data found in the HTML the server sent
+  jsCreatesSchema: boolean; // inline JavaScript builds application/ld+json in the browser
+  tagManager: boolean; // Google Tag Manager is installed (schema may be injected through it)
+  emptyAppShell: boolean; // the body is an empty <div id="root|app|__next"> filled by JavaScript
+  csrValues: number; // structured data values that only appear after JavaScript
+  framework?: string;
+};
+
 export type Report = {
   source: { kind: "url" | "code"; url?: string; finalUrl?: string; status?: number; bytes?: number; ms?: number };
   vocabVersion: string;
@@ -68,5 +77,6 @@ export type Report = {
   richResults: RichResult[];
   content: ContentCheck[] | null; // null when there is no page text to compare (code mode)
   graph: { nodes: GraphNode[]; edges: GraphEdge[] };
+  rendering: Rendering | null; // null for pasted JSON-LD snippets
   counts: { items: number; errors: number; warnings: number; info: number };
 };

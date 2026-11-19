@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Issue, Item, Report, RichResult, Severity, Value } from "@/lib/schema/types";
+import type { Issue, Item, Rendering, Report, RichResult, Severity, Value } from "@/lib/schema/types";
 import { EXAMPLE_CODE } from "./example";
 
 type Mode = "url" | "code";
@@ -330,6 +330,80 @@ function Empty({ title, body }: { title: string; body: string }) {
   );
 }
 
+// ---------- Rendering (SSR vs CSR) ----------
+
+type Row = { s: Severity | "pass"; title: string; body: string };
+
+function renderingRows(r: Rendering): Row[] {
+  const rows: Row[] = [];
+  const ssrFix =
+    r.framework === "Next.js"
+      ? " In Next.js, render this section in a Server Component (or with SSR/SSG) instead of only on the client."
+      : r.framework === "Nuxt"
+        ? " In Nuxt, keep this content in server-rendered components rather than client-only ones."
+        : r.framework === "React" || r.framework === "Angular"
+          ? ` For a ${r.framework} app, use server-side rendering or pre-rendering for these pages.`
+          : "";
+
+  if (r.schemaInServerHtml)
+    rows.push({ s: "pass", title: "Structured data is in the server HTML", body: "Search engines and AI crawlers can read it without running JavaScript. This is the recommended setup." });
+  else
+    rows.push({
+      s: "warning",
+      title: "No structured data in the server HTML",
+      body:
+        r.tagManager || r.jsCreatesSchema || r.emptyAppShell
+          ? "It may be added by JavaScript or Google Tag Manager after the page loads, which this check can't see. Google can process structured data added with JavaScript, but only after rendering, which can be delayed, and crawlers that don't run JavaScript never see it. Best practice: output JSON-LD in the server-rendered HTML."
+          : "There's no structured data in the HTML this page sends.",
+    });
+
+  if (r.jsCreatesSchema)
+    rows.push({ s: "warning", title: "JavaScript on this page writes structured data in the browser", body: "That markup isn't in the server HTML, so it isn't checked here and crawlers that don't run JavaScript miss it. Best practice: move it into the server-rendered HTML." });
+
+  if (r.tagManager)
+    rows.push({ s: "info", title: "Google Tag Manager is installed", body: "Any structured data deployed through Tag Manager isn't in the server HTML and isn't checked here. Google supports it, but it's picked up later and breaks easily when tags change. Best practice: add schema to the page template, not through GTM." });
+
+  if (r.emptyAppShell)
+    rows.push({ s: "warning", title: "The page is an empty app shell", body: `The server sends an empty container and JavaScript builds the page (client-side rendering). Crawlers get no content from the first HTML.${ssrFix || " Use server-side rendering or static generation."}` });
+
+  if (r.csrValues > 0)
+    rows.push({
+      s: "warning",
+      title: `${r.csrValues} value${r.csrValues === 1 ? "" : "s"} in your markup only appear${r.csrValues === 1 ? "s" : ""} after JavaScript runs`,
+      body: `The content your structured data describes is rendered in the browser (CSR), not sent by the server. Google usually sees it after rendering, but rendering can be delayed, and many other crawlers and AI assistants read only the raw HTML. Best practice: server-side render (SSR) this content so the visible text and the markup arrive together.${ssrFix} Details are under Content match.`,
+    });
+  else if (r.schemaInServerHtml)
+    rows.push({ s: "pass", title: "The content your markup describes is in the server HTML", body: "Nothing it relies on needs JavaScript to appear." });
+
+  return rows;
+}
+
+function RenderingPanel({ r }: { r: Rendering }) {
+  const rows = renderingRows(r);
+  const ok = rows.every((x) => x.s === "pass" || x.s === "info");
+  return (
+    <section aria-labelledby="rendering-heading" className="mt-6 rounded-xl border border-rule bg-white">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule px-5 py-3.5">
+        <h3 id="rendering-heading" className="font-semibold">
+          Rendering check: {ok ? "server-side, as recommended" : "parts of this page rely on JavaScript"}
+        </h3>
+        {r.framework && <p className="text-sm text-ink-soft">Built with {r.framework}</p>}
+      </div>
+      <ul className="divide-y divide-rule">
+        {rows.map((x) => (
+          <li key={x.title} className="flex gap-3 px-5 py-3.5">
+            <SevIcon s={x.s} className="mt-0.5 h-4 w-4" />
+            <div className="min-w-0">
+              <p className="font-medium leading-snug">{x.title}</p>
+              <p className="mt-1 max-w-4xl text-[0.93rem] leading-relaxed text-ink-soft">{x.body}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 // ---------- Report for developers ----------
 
 function plainReport(report: Report): string {
@@ -337,6 +411,14 @@ function plainReport(report: Report): string {
   lines.push(`Structured data report: ${report.source.finalUrl ?? report.source.url ?? "pasted code"}`);
   lines.push(`Checked with SEO People Hub's Schema Validator (schema.org ${report.vocabVersion})`);
   lines.push(`${report.counts.errors} errors, ${report.counts.warnings} warnings, ${report.counts.info} notes`, "");
+  if (report.rendering) {
+    const rows = renderingRows(report.rendering).filter((x) => x.s !== "pass");
+    if (rows.length) {
+      lines.push("RENDERING (SSR vs CSR)");
+      for (const x of rows) lines.push(`- ${x.title}. ${x.body}`);
+      lines.push("");
+    }
+  }
   for (const s of ["error", "warning", "info"] as Severity[]) {
     const list = report.issues.filter((i) => i.severity === s);
     if (!list.length) continue;
@@ -603,7 +685,9 @@ export function SchemaValidator() {
             </div>
           </div>
 
-          <div role="tablist" aria-label="Results" className="-mx-1 mt-5 flex gap-1 overflow-x-auto pb-1">
+          {report.rendering && <RenderingPanel r={report.rendering} />}
+
+          <div role="tablist" aria-label="Results" className="-mx-1 mt-6 flex gap-1 overflow-x-auto pb-1">
             {tabs.map((t) => (
               <button
                 key={t.id}

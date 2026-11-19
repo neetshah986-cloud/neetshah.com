@@ -313,7 +313,10 @@ export type Extraction = {
   hints: { usesTagManager: boolean; isJsApp: boolean; jsCreatesSchema: boolean; framework?: string };
 };
 
-export function extract(input: string, opts: { isFullPage: boolean }): Extraction {
+export function extract(rawInput: string, opts: { isFullPage: boolean }): Extraction {
+  // The HTML parser turns \r\n into \n before it counts positions, so do the same up front
+  // or every offset drifts by one character per line on pages with Windows line endings.
+  const input = rawInput.replace(/\r\n?/g, "\n");
   const ctx = makeCtx();
   const blocks: Block[] = [];
 

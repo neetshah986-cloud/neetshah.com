@@ -1,5 +1,6 @@
 import { FetchError, fetchPage, rateLimited } from "@/lib/safe-fetch";
 import { analyse } from "@/lib/schema";
+import { inspectGtm } from "@/lib/schema/gtm";
 
 const MAX_CODE = 1024 * 1024;
 
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     if (!url) return Response.json({ error: "Enter a URL to check." }, { status: 400 });
     const page = await fetchPage(url);
     const report = analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status, bytes: page.bytes, ms: page.ms });
+    if (report.rendering?.tagManager) report.rendering.gtm = await inspectGtm(page.html);
     const looksBlocked = [202, 401, 403, 429, 503].includes(page.status) && Object.keys(report.items).length === 0;
     if (looksBlocked) {
       report.counts.warnings++;

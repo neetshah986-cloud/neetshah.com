@@ -63,6 +63,7 @@ export type Rendering = {
   schemaInServerHtml: boolean; // structured data found in the HTML the server sent
   jsCreatesSchema: boolean; // inline JavaScript builds application/ld+json in the browser
   tagManager: boolean; // Google Tag Manager is installed (schema may be injected through it)
+  gtm?: { id: string; checked: boolean; schemaTags: number; types: string[] }[]; // containers inspected (URL mode)
   emptyAppShell: boolean; // the body is an empty <div id="root|app|__next"> filled by JavaScript
   csrValues: number; // structured data values that only appear after JavaScript
   missingValues: number; // structured data values that aren't in the HTML at all

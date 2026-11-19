@@ -44,7 +44,7 @@ async function assertPublic(url: URL) {
 
 export type FetchedPage = { finalUrl: string; status: number; html: string; bytes: number; ms: number; redirects: string[] };
 
-export async function fetchPage(input: string): Promise<FetchedPage> {
+export async function fetchPage(input: string, opts: { accept?: "html" | "script" } = {}): Promise<FetchedPage> {
   if (/^[a-z][a-z0-9+.-]*:/i.test(input.trim()) && !/^https?:\/\//i.test(input.trim()))
     throw new FetchError("Only http:// and https:// URLs can be checked.");
   let url: URL;
@@ -77,7 +77,8 @@ export async function fetchPage(input: string): Promise<FetchedPage> {
     }
 
     const type = res.headers.get("content-type") ?? "";
-    if (type && !/html|xml/i.test(type)) throw new FetchError(`That URL returned ${type.split(";")[0]}, not an HTML page.`, 422);
+    const okType = opts.accept === "script" ? /javascript|ecmascript|text\/plain/i : /html|xml/i;
+    if (type && !okType.test(type)) throw new FetchError(`That URL returned ${type.split(";")[0]}, not an HTML page.`, 422);
 
     const reader = res.body?.getReader();
     const chunks: Uint8Array[] = [];

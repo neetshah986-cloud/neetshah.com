@@ -377,8 +377,32 @@ function renderingRows(r: Rendering): Row[] {
   if (r.jsCreatesSchema)
     rows.push({ s: "warning", title: "JavaScript on this page writes structured data in the browser", body: "That markup isn't in the server HTML, so it isn't checked here and crawlers that don't run JavaScript miss it. Best practice: move it into the server-rendered HTML." });
 
-  if (r.tagManager)
-    rows.push({ s: "info", title: "Google Tag Manager is installed", body: "Any structured data deployed through Tag Manager isn't in the server HTML and isn't checked here. Google supports it, but it's picked up later and breaks easily when tags change. Best practice: add schema to the page template, not through GTM." });
+  if (r.tagManager) {
+    const checked = (r.gtm ?? []).filter((c) => c.checked);
+    const withSchema = checked.filter((c) => c.schemaTags > 0);
+    const ids = (r.gtm ?? []).map((c) => c.id).join(", ");
+    if (withSchema.length) {
+      const types = [...new Set(withSchema.flatMap((c) => c.types))];
+      const tags = withSchema.reduce((n, c) => n + c.schemaTags, 0);
+      rows.push({
+        s: "warning",
+        title: `Structured data is also added through Google Tag Manager (${withSchema.map((c) => c.id).join(", ")})`,
+        body: `The container has ${tags} tag${tags === 1 ? "" : "s"} that write JSON-LD${types.length ? `, with ${types.join(", ")}` : ""}. That markup only exists after GTM runs in the browser, so it isn't in the server HTML and isn't validated here. Google can pick it up after rendering, but it's slower, other crawlers and AI assistants miss it, and it breaks easily when tags change. It can also duplicate or contradict the markup already in the page. Best practice: move it into the page template and remove the GTM tags.`,
+      });
+    } else if (checked.length) {
+      rows.push({
+        s: "pass",
+        title: `No structured data in Google Tag Manager (${checked.map((c) => c.id).join(", ")})`,
+        body: "Tag Manager is installed, but its container doesn't add any JSON-LD. Your schema isn't deployed through GTM, which is the recommended setup.",
+      });
+    } else {
+      rows.push({
+        s: "info",
+        title: `Google Tag Manager is installed${ids ? ` (${ids})` : ""}`,
+        body: "This doesn't mean your schema is in GTM. The container couldn't be checked, so if anyone adds structured data through Tag Manager, it wouldn't be validated here. Best practice: add schema to the page template, not through GTM.",
+      });
+    }
+  }
 
   if (r.emptyAppShell)
     rows.push({ s: "warning", title: "The page is an empty app shell", body: `The server sends an empty container and JavaScript builds the page (client-side rendering). Crawlers get no content from the first HTML.${ssrFix || " Use server-side rendering or static generation."}` });

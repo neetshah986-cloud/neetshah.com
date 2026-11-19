@@ -198,31 +198,53 @@ function GoogleView({ report }: { report: Report }) {
 
 // ---------- Content match ----------
 
+const WHERE = {
+  page: { label: "On the page", tone: "text-pass", icon: "pass" as const },
+  js: { label: "Only after JavaScript", tone: "text-serp", icon: "info" as const },
+  missing: { label: "Not on the page", tone: "text-warn", icon: "warning" as const },
+};
+
 function ContentView({ report }: { report: Report }) {
   if (report.content === null)
-    return <Empty title="Fetch a URL to compare with the page" body="Content matching compares your structured data with the text visitors see. That needs the full page, so check a URL rather than pasted code." />;
+    return <Empty title="Fetch a URL to compare with the page" body="Content matching compares your structured data with the text visitors see. That needs the full page, so check a URL or paste the whole page source rather than just the JSON-LD." />;
   if (!report.content.length)
     return <Empty title="Nothing to compare" body="Content matching covers products, articles, events, recipes, jobs, local businesses, reviews and FAQs. None were found on this page." />;
-  const missing = report.content.filter((c) => !c.found).length;
+  const where = (c: { where?: string; found: boolean }) => (c.where ?? (c.found ? "page" : "missing")) as keyof typeof WHERE;
+  const missing = report.content.filter((c) => where(c) === "missing").length;
+  const js = report.content.filter((c) => where(c) === "js").length;
+  const total = report.content.length;
   return (
     <div>
       <p className="max-w-3xl text-ink-soft">
-        Google&apos;s guidelines say structured data must describe content that is visible on the page. Values that don&apos;t appear in the page text can make a page ineligible for rich results, or count as spammy markup.
+        Google&apos;s guidelines say structured data must describe content that is visible on the page. Values that aren&apos;t visible can make a page ineligible for rich results, or count as spammy markup.
       </p>
-      <p className="mt-4 font-medium">
-        {missing ? `${missing} of ${report.content.length} values weren't found in the visible text.` : `All ${report.content.length} values were found in the visible text.`}
-      </p>
-      <ul className="mt-5 divide-y divide-rule border-y border-rule">
-        {report.content.map((c, k) => (
-          <li key={k} className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 py-3 md:grid-cols-[auto_minmax(0,19rem)_1fr_auto] md:gap-x-5">
-            <SevIcon s={c.found ? "pass" : "warning"} className="mt-0.5 h-4 w-4" />
-            <span className="break-all font-mono text-[0.85rem] text-ink-soft">
-              {typeLabel(report.items[c.item]?.types ?? [])}.{c.prop}
-            </span>
-            <span className="col-start-2 break-words text-[0.92rem] md:col-start-auto">{c.value.length > 160 ? `${c.value.slice(0, 160)}…` : c.value}</span>
-            <span className={`col-start-2 text-sm md:col-start-auto ${c.found ? "text-pass" : "text-warn"}`}>{c.found ? "On the page" : "Not on the page"}</span>
-          </li>
-        ))}
+      <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-1 font-medium">
+        <li className="text-pass">{total - missing - js} on the page</li>
+        {js > 0 && <li className="text-serp">{js} only after JavaScript</li>}
+        <li className={missing ? "text-warn" : "text-ink-soft"}>{missing} not on the page</li>
+      </ul>
+      {js > 0 && (
+        <div className="mt-5 max-w-3xl rounded-xl border border-serp/25 bg-serp/5 px-5 py-4 text-[0.95rem] leading-relaxed">
+          <p className="font-semibold">Some content is added by JavaScript</p>
+          <p className="mt-1 text-ink-soft">
+            These values aren&apos;t in the HTML your server sends. The page&apos;s JavaScript adds them in the browser, which is client-side rendering. Google renders JavaScript, so it will usually see them, but rendering can be delayed, and many other crawlers and AI assistants read only the raw HTML. Rendering this content on the server is the safer option.
+          </p>
+        </div>
+      )}
+      <ul className="mt-6 divide-y divide-rule border-y border-rule">
+        {report.content.map((c, k) => {
+          const w = WHERE[where(c)];
+          return (
+            <li key={k} className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 py-3 md:grid-cols-[auto_minmax(0,19rem)_1fr_auto] md:gap-x-5">
+              <SevIcon s={w.icon} className="mt-0.5 h-4 w-4" />
+              <span className="break-all font-mono text-[0.85rem] text-ink-soft">
+                {typeLabel(report.items[c.item]?.types ?? [])}.{c.prop}
+              </span>
+              <span className="col-start-2 break-words text-[0.92rem] md:col-start-auto">{c.value.length > 160 ? `${c.value.slice(0, 160)}…` : c.value}</span>
+              <span className={`col-start-2 text-sm md:col-start-auto ${w.tone}`}>{w.label}</span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -331,10 +353,16 @@ function plainReport(report: Report): string {
     for (const r of rich) lines.push(`- ${r.feature} (${r.type}): ${r.missingRequired.join(", ")}`);
     lines.push("");
   }
-  const missing = report.content?.filter((c) => !c.found) ?? [];
+  const missing = report.content?.filter((c) => c.where === "missing") ?? [];
   if (missing.length) {
-    lines.push("NOT VISIBLE ON THE PAGE");
+    lines.push("IN STRUCTURED DATA BUT NOT VISIBLE ON THE PAGE");
     for (const c of missing) lines.push(`- ${c.prop}: ${c.value.slice(0, 120)}`);
+    lines.push("");
+  }
+  const jsOnly = report.content?.filter((c) => c.where === "js") ?? [];
+  if (jsOnly.length) {
+    lines.push("VISIBLE ONLY AFTER JAVASCRIPT RUNS (not in the server HTML)");
+    for (const c of jsOnly) lines.push(`- ${c.prop}: ${c.value.slice(0, 120)}`);
   }
   return lines.join("\n");
 }
@@ -425,7 +453,7 @@ export function SchemaValidator() {
     ? [
         { id: "items", label: "Items", n: report.counts.errors, s: "error" },
         { id: "google", label: "Google features", n: report.richResults.filter((r) => r.status === "invalid").length, s: "error" },
-        { id: "content", label: "Content match", n: report.content?.filter((c) => !c.found).length ?? 0, s: "warning" },
+        { id: "content", label: "Content match", n: report.content?.filter((c) => (c.where ?? (c.found ? "page" : "missing")) === "missing").length ?? 0, s: "warning" },
         { id: "graph", label: "Entity graph", n: report.graph.edges.filter((e) => !e.resolved).length, s: "warning" },
         { id: "source", label: "Source" },
       ]

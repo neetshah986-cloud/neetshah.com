@@ -51,7 +51,9 @@ export type ContentCheck = {
   item: string;
   prop: string;
   value: string;
-  found: boolean;
+  found: boolean; // true only when it's in the server HTML's visible text
+  // page: in the server HTML. js: only in the page's JavaScript, so it appears after rendering. missing: not visible anywhere.
+  where: "page" | "js" | "missing";
 };
 
 export type GraphNode = { id: string; item: string; types: string[] };

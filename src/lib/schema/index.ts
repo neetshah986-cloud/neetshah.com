@@ -45,7 +45,7 @@ export function analyse(html: string, source: Report["source"]): Report {
     items: x.items,
     issues,
     richResults: richResults(topLevel, x.items),
-    content: x.pageText !== null ? contentChecks(topLevel, x.items, x.pageText) : null,
+    content: x.pageText !== null ? contentChecks(topLevel, x.items, x.pageText, x.scriptText ?? "") : null,
     graph: v.graph,
     counts,
   };

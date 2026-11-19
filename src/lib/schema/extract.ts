@@ -283,6 +283,7 @@ export type Extraction = {
   items: Record<string, Item>;
   issues: Issue[];
   pageText: string | null;
+  scriptText: string | null; // text of non-JSON-LD scripts, where client-side apps keep their content
   hints: { usesTagManager: boolean; isJsApp: boolean };
 };
 
@@ -303,7 +304,19 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
   extractRdfa($, ctx, blocks);
 
   let pageText: string | null = null;
+  let scriptText: string | null = null;
   if (opts.isFullPage) {
+    const parts: string[] = [];
+    let size = 0;
+    $("script").each((_, el) => {
+      const type = ($(el).attr("type") ?? "").toLowerCase();
+      if (type === "application/ld+json" || $(el).attr("src")) return;
+      const t = $(el).text();
+      if (size + t.length > 8_000_000) return;
+      size += t.length;
+      parts.push(t);
+    });
+    scriptText = parts.join("\n");
     const $body = cheerio.load(html);
     $body("script, style, noscript, template, svg").remove();
     pageText = ($body("body").text() || $body.root().text()).replace(/\s+/g, " ").trim();
@@ -314,6 +327,7 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
     items: ctx.all,
     issues: ctx.issues,
     pageText,
+    scriptText,
     hints: {
       usesTagManager: /googletagmanager\.com\/gtm\.js|GTM-[A-Z0-9]+/.test(input),
       isJsApp: /<div id="(root|app|__next|__nuxt)"[^>]*>\s*<\/div>/.test(input),

@@ -78,7 +78,38 @@ function foundIn(page: { text: string; normal: string; digits: string }, prop: s
   return page.normal.includes(probe);
 }
 
-export function contentChecks(topLevel: Item[], all: Record<string, Item>, pageText: string): ContentCheck[] {
+// Client-side apps (React, Next.js, Vue) ship their content as JavaScript data that the browser turns into HTML.
+const decodeScript = (s: string) =>
+  s
+    .replace(/\\u003c/gi, "<")
+    .replace(/\\u003e/gi, ">")
+    .replace(/\\u0026/gi, "&")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\[nrt]/g, " ")
+    .replace(/\\(["'\/])/g, "$1")
+    .toLowerCase();
+
+const NO_JS_CHECK = new Set(["price", "lowPrice", "ratingValue", "reviewCount", "ratingCount", "telephone", "startDate"]);
+
+/** Is the value in the page's JavaScript as content, rather than as a copy of the structured data itself? */
+function inScriptContent(script: string, prop: string, value: string): boolean {
+  const last = prop.split(".").pop()!;
+  if (NO_JS_CHECK.has(last) || !script) return false;
+  const probe = value.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 60);
+  if (probe.length < 4) return false;
+  const copyOfSchema = new RegExp(`["']?${last.toLowerCase()}["']?\\s*:\\s*["']?$`);
+  let i = -1;
+  while ((i = script.indexOf(probe, i + 1)) >= 0) {
+    const before = script.slice(Math.max(0, i - 300), i);
+    // e.g. {"@type":"PostalAddress","streetAddress":"801, ..."} is the schema repeated in app state, not content.
+    if (copyOfSchema.test(before) && /@type/.test(before)) continue;
+    return true;
+  }
+  return false;
+}
+
+export function contentChecks(topLevel: Item[], all: Record<string, Item>, pageText: string, scriptText = ""): ContentCheck[] {
+  const script = decodeScript(scriptText);
   const byId = new Map<string, Item>();
   for (const i of Object.values(all)) if (i.id && !byId.has(i.id)) byId.set(i.id, i);
   const page = { text: pageText, normal: norm(pageText), digits: pageText.replace(/\D/g, "") };
@@ -96,7 +127,9 @@ export function contentChecks(topLevel: Item[], all: Record<string, Item>, pageT
         const key = `${item.uid}|${path}|${value}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({ item: item.uid, prop: path, value, found: foundIn(page, path, value) });
+        const onPage = foundIn(page, path, value);
+        const where = onPage ? "page" : inScriptContent(script, path, value) ? "js" : "missing";
+        out.push({ item: item.uid, prop: path, value, found: onPage, where });
       }
   }
   return out;

@@ -26,7 +26,18 @@ export async function POST(request: Request) {
     if (!url) return Response.json({ error: "Enter a URL to check." }, { status: 400 });
     const page = await fetchPage(url);
     const report = analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status, bytes: page.bytes, ms: page.ms });
-    if (page.status >= 400) {
+    const looksBlocked = [202, 401, 403, 429, 503].includes(page.status) && Object.keys(report.items).length === 0;
+    if (looksBlocked) {
+      report.counts.warnings++;
+      report.issues = report.issues.filter((i) => i.code !== "none-found");
+      report.issues.unshift({
+        severity: "warning",
+        code: "blocked",
+        message: `The site didn't return the page to this tool (HTTP ${page.status}). It probably blocks automated requests.`,
+        hint: "Open the page in your browser, view its source (Ctrl+U, or Cmd+Option+U on a Mac), copy it all, and check it with Paste code instead.",
+      });
+      report.counts.warnings = report.issues.filter((i) => i.severity === "warning").length;
+    } else if (page.status >= 400) {
       report.counts.warnings++;
       report.issues.unshift({
         severity: "warning",

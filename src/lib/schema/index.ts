@@ -47,6 +47,7 @@ export function analyse(html: string, source: Report["source"]): Report {
 
   return {
     source,
+    html: x.html,
     vocabVersion: VOCAB_VERSION,
     blocks: x.blocks,
     items: x.items,

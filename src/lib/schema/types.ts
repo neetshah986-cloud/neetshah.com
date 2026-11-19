@@ -6,7 +6,7 @@ export type Value =
   | { kind: "item"; item: Item }
   | { kind: "ref"; id: string };
 
-export type Prop = { name: string; values: Value[] };
+export type Prop = { name: string; values: Value[]; at?: number }; // at: offset of the key/attribute in the source
 
 export type Item = {
   uid: string; // stable id for linking issues to the UI, e.g. "i3"
@@ -15,6 +15,7 @@ export type Item = {
   types: string[]; // schema.org short names; anything else as the full IRI
   id?: string; // @id / itemid / resource
   props: Prop[];
+  loc?: { start: number; end: number }; // offsets in the source HTML
 };
 
 export type Issue = {
@@ -30,6 +31,7 @@ export type Block = {
   index: number;
   format: Format;
   line?: number; // line in the HTML where the block starts
+  start?: number; // offset in the HTML where the block starts
   raw?: string; // JSON-LD source text
   items: Item[]; // top-level items in this block
 };
@@ -72,6 +74,7 @@ export type Rendering = {
 
 export type Report = {
   source: { kind: "url" | "code"; url?: string; finalUrl?: string; status?: number; bytes?: number; ms?: number };
+  html: string; // the source that was checked, for the source viewer
   vocabVersion: string;
   blocks: Block[];
   items: Record<string, Item>; // every item, nested ones included, by uid

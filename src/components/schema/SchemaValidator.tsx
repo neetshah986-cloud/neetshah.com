@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Issue, Item, Rendering, Report, RichResult, Severity, Value } from "@/lib/schema/types";
 import { EXAMPLE_CODE } from "./example";
+import { SourceViewer, type Focus } from "./SourceViewer";
 
 type Mode = "url" | "code";
 type Tab = "items" | "google" | "content" | "graph" | "source";
@@ -62,13 +63,22 @@ const typeLabel = (types: string[]) => (types.length ? types.join(" / ") : "Unty
 
 // ---------- Items ----------
 
-function ItemView({ item, issuesByItem, depth = 0 }: { item: Item; issuesByItem: Map<string, Issue[]>; depth?: number }) {
+type Pick = (f: { start: number; end: number; at?: number }) => void;
+
+function ItemView({ item, issuesByItem, depth = 0, onPick, activeAt }: { item: Item; issuesByItem: Map<string, Issue[]>; depth?: number; onPick?: Pick; activeAt?: number }) {
   const own = issuesByItem.get(item.uid) ?? [];
   const itemLevel = own.filter((i) => !i.prop).sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
+  const pickItem = () => item.loc && onPick?.({ start: item.loc.start, end: item.loc.end });
   return (
-    <div className={depth ? "mt-2 rounded-lg border border-rule bg-paper" : ""}>
+    <div className={`@container min-w-0 ${depth ? "mt-2 rounded-lg border border-rule bg-paper" : ""}`}>
       <div className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 ${depth ? "border-b border-rule px-4 py-2.5" : "pb-3"}`}>
-        <span className={depth ? "font-semibold" : "text-xl font-semibold tracking-tight"}>{typeLabel(item.types)}</span>
+        {depth > 0 && item.loc && onPick ? (
+          <button type="button" onClick={pickItem} className="font-semibold hover:text-serp" title="Show in source">
+            {typeLabel(item.types)}
+          </button>
+        ) : (
+          <span className={depth ? "font-semibold" : "text-xl font-semibold tracking-tight"}>{typeLabel(item.types)}</span>
+        )}
         {item.id && <span className="break-all font-mono text-xs text-ink-soft">{item.id}</span>}
       </div>
       {itemLevel.length > 0 && (
@@ -82,16 +92,32 @@ function ItemView({ item, issuesByItem, depth = 0 }: { item: Item; issuesByItem:
         {item.props.map((p) => {
           const pIssues = own.filter((i) => i.prop === p.name).sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
           const worst = pIssues[0]?.severity;
+          const active = p.at !== undefined && p.at === activeAt;
+          const canPick = onPick && p.at !== undefined && item.loc;
           return (
-            <div key={p.name} className={`grid gap-x-4 gap-y-1 py-2.5 sm:grid-cols-[minmax(8rem,13rem)_1fr] ${depth ? "px-4" : ""}`}>
-              <dt className="flex items-start gap-2 pt-0.5 font-mono text-[0.85rem]">
-                <SevIcon s={worst ?? "pass"} className="mt-0.5 h-3.5 w-3.5" />
-                <span className="break-all">{p.name}</span>
+            <div key={p.name} className={`grid gap-x-4 gap-y-1 py-2.5 @lg:grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)] ${depth ? "px-3 @sm:px-4" : "px-2"} ${active ? "bg-serp/[0.07]" : ""}`}>
+              <dt className="pt-0.5 font-mono text-[0.85rem]">
+                {canPick ? (
+                  <button
+                    type="button"
+                    onClick={() => onPick({ start: item.loc!.start, end: item.loc!.end, at: p.at })}
+                    className={`flex items-start gap-2 text-left hover:text-serp ${active ? "text-serp" : ""}`}
+                    title="Show in source"
+                  >
+                    <SevIcon s={worst ?? "pass"} className="mt-0.5 h-3.5 w-3.5" />
+                    <span className="break-all underline decoration-rule decoration-dotted underline-offset-4">{p.name}</span>
+                  </button>
+                ) : (
+                  <span className="flex items-start gap-2">
+                    <SevIcon s={worst ?? "pass"} className="mt-0.5 h-3.5 w-3.5" />
+                    <span className="break-all">{p.name}</span>
+                  </span>
+                )}
               </dt>
               <dd className="min-w-0">
                 {p.values.length === 0 && <span className="text-ink-soft">(empty)</span>}
                 {p.values.map((v, k) => (
-                  <ValueView key={k} v={v} issuesByItem={issuesByItem} depth={depth} />
+                  <ValueView key={k} v={v} issuesByItem={issuesByItem} depth={depth} onPick={onPick} activeAt={activeAt} />
                 ))}
                 {pIssues.length > 0 && (
                   <div className="mt-1.5 rounded-md bg-mist/70 px-3 py-1">
@@ -109,8 +135,8 @@ function ItemView({ item, issuesByItem, depth = 0 }: { item: Item; issuesByItem:
   );
 }
 
-function ValueView({ v, issuesByItem, depth }: { v: Value; issuesByItem: Map<string, Issue[]>; depth: number }) {
-  if (v.kind === "item") return <ItemView item={v.item} issuesByItem={issuesByItem} depth={depth + 1} />;
+function ValueView({ v, issuesByItem, depth, onPick, activeAt }: { v: Value; issuesByItem: Map<string, Issue[]>; depth: number; onPick?: Pick; activeAt?: number }) {
+  if (v.kind === "item") return <ItemView item={v.item} issuesByItem={issuesByItem} depth={depth + 1} onPick={onPick} activeAt={activeAt} />;
   if (v.kind === "ref")
     return (
       <p className="text-[0.92rem]">
@@ -131,6 +157,188 @@ function ValueView({ v, issuesByItem, depth }: { v: Value; issuesByItem: Map<str
         v.value
       )}
     </p>
+  );
+}
+
+// ---------- Inspector: types → items → item, next to the source ----------
+
+const itemTitle = (item: Item) => {
+  for (const name of ["name", "headline", "title", "alternateName"]) {
+    const v = item.props.find((p) => p.name === name)?.values[0];
+    if (v?.kind === "text" && v.value.trim()) return v.value.trim();
+  }
+  return item.id ?? null;
+};
+
+type View = { level: "types" } | { level: "items"; group: string } | { level: "item"; uid: string; group: string };
+
+function Inspector({
+  report,
+  issuesByItem,
+  totals,
+  pageIssues,
+}: {
+  report: Report;
+  issuesByItem: Map<string, Issue[]>;
+  totals: Map<string, Record<Severity, number>>;
+  pageIssues: Issue[];
+}) {
+  const topLevel = report.blocks.flatMap((b) => b.items);
+  const groups = useMemo(() => {
+    const m = new Map<string, Item[]>();
+    for (const it of topLevel) {
+      const key = typeLabel(it.types);
+      m.set(key, [...(m.get(key) ?? []), it]);
+    }
+    return [...m.entries()].map(([name, items]) => {
+      const sum = { error: 0, warning: 0, info: 0 };
+      for (const it of items) {
+        const t = totals.get(it.uid);
+        if (t) (Object.keys(sum) as Severity[]).forEach((k) => (sum[k] += t[k]));
+      }
+      return { name, items, sum };
+    });
+  }, [topLevel, totals]);
+
+  const [view, setView] = useState<View>({ level: "types" });
+  const [focus, setFocus] = useState<Focus>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
+
+  const markers = useMemo(() => {
+    const m = new Map<number, Severity>();
+    const rank = { error: 0, warning: 1, info: 2 } as const;
+    for (const i of report.issues) {
+      if (!i.item || i.severity === "info") continue;
+      const item = report.items[i.item];
+      const at = (i.prop ? item?.props.find((p) => p.name === i.prop)?.at : undefined) ?? item?.loc?.start;
+      if (at === undefined) continue;
+      const cur = m.get(at);
+      if (!cur || rank[i.severity] < rank[cur]) m.set(at, i.severity);
+    }
+    return m;
+  }, [report]);
+
+  const pick: Pick = (f) => {
+    setFocus(f);
+    setSourceOpen(true);
+  };
+  const openItem = (it: Item, group: string) => {
+    setView({ level: "item", uid: it.uid, group });
+    if (it.loc) setFocus({ start: it.loc.start, end: it.loc.end });
+  };
+  const openGroup = (g: { name: string; items: Item[] }) => {
+    if (g.items.length === 1) openItem(g.items[0], g.name);
+    else {
+      setView({ level: "items", group: g.name });
+      const firstLoc = g.items[0]?.loc;
+      if (firstLoc) setFocus({ start: firstLoc.start, end: firstLoc.end });
+    }
+  };
+
+  const group = view.level !== "types" ? groups.find((g) => g.name === view.group) : undefined;
+  const item = view.level === "item" ? report.items[view.uid] : undefined;
+
+  const back = (to: View) => (
+    <button type="button" onClick={() => setView(to)} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-ink-soft hover:text-ink">
+      <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
+        <path d="M12.5 4.5L7 10l5.5 5.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {to.level === "types" ? "All detected types" : view.level !== "types" ? view.group : ""}
+    </button>
+  );
+
+  const counts = (sum?: Record<Severity, number>) => (
+    <span className="flex shrink-0 items-center gap-1">
+      <Count n={sum?.error ?? 0} s="error" />
+      <Count n={sum?.warning ?? 0} s="warning" />
+      {!sum?.error && !sum?.warning && <SevIcon s="pass" className="h-4 w-4" />}
+    </span>
+  );
+
+  const navigator = (
+    <div className="min-w-0">
+      {view.level === "types" && (
+        <>
+          {pageIssues.length > 0 && (
+            <div className="mb-5 rounded-xl border border-rule bg-white px-5 py-3">
+              {pageIssues.map((i, k) => (
+                <IssueLine key={k} issue={i} />
+              ))}
+            </div>
+          )}
+          <p className="mb-3 text-sm text-ink-soft">
+            {groups.length} type{groups.length === 1 ? "" : "s"} detected. Choose one to inspect it and see it in the source.
+          </p>
+          <ul className="divide-y divide-rule overflow-hidden rounded-xl border border-rule bg-white">
+            {groups.map((g) => (
+              <li key={g.name}>
+                <button type="button" onClick={() => openGroup(g)} className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition-colors hover:bg-mist/60">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{g.name}</span>
+                    <span className="block text-sm text-ink-soft">
+                      {g.items.length} item{g.items.length === 1 ? "" : "s"} · {[...new Set(g.items.map((i) => FORMAT_LABEL[i.format]))].join(", ")}
+                    </span>
+                  </span>
+                  {counts(g.sum)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {view.level === "items" && group && (
+        <>
+          {back({ level: "types" })}
+          <h3 className="text-xl font-semibold tracking-tight">
+            {group.name} <span className="font-normal text-ink-soft">({group.items.length})</span>
+          </h3>
+          <ul className="mt-4 divide-y divide-rule overflow-hidden rounded-xl border border-rule bg-white">
+            {group.items.map((it, k) => {
+              const title = itemTitle(it);
+              return (
+                <li key={it.uid}>
+                  <button type="button" onClick={() => openItem(it, group.name)} className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition-colors hover:bg-mist/60">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{title ?? `${group.name} ${k + 1}`}</span>
+                      <span className="block text-sm text-ink-soft">
+                        {FORMAT_LABEL[it.format]}
+                        {it.loc ? ` · line ${report.html.slice(0, it.loc.start).split("\n").length}` : ""}
+                      </span>
+                    </span>
+                    {counts(totals.get(it.uid))}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {view.level === "item" && item && (
+        <>
+          {back(group && group.items.length > 1 ? { level: "items", group: view.group } : { level: "types" })}
+          {itemTitle(item) && <p className="mb-1 truncate text-sm text-ink-soft">{itemTitle(item)}</p>}
+          <ItemView item={item} issuesByItem={issuesByItem} onPick={pick} activeAt={focus?.at} />
+          <p className="mt-3 text-sm text-ink-soft">Select a property name to see it in the source.</p>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8">
+      <div className="order-2 min-w-0 lg:order-1">
+        <div className="hidden lg:sticky lg:top-24 lg:block">
+          <SourceViewer html={report.html} focus={focus} markers={markers} className="h-[calc(100vh-8rem)] min-h-[28rem]" />
+        </div>
+        <details open={sourceOpen} onToggle={(e) => setSourceOpen((e.target as HTMLDetailsElement).open)} className="lg:hidden">
+          <summary className="cursor-pointer rounded-lg border border-rule bg-white px-4 py-3 font-medium">Page source</summary>
+          {sourceOpen && <SourceViewer html={report.html} focus={focus} markers={markers} className="mt-3 h-[60vh]" />}
+        </details>
+      </div>
+      <div className="order-1 min-w-0 lg:order-2">{navigator}</div>
+    </div>
   );
 }
 
@@ -507,7 +715,6 @@ export function SchemaValidator() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [tab, setTab] = useState<Tab>("items");
-  const [selected, setSelected] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -523,7 +730,6 @@ export function SchemaValidator() {
       const r = data as Report;
       setReport(r);
       setTab("items");
-      setSelected(r.blocks.flatMap((b) => b.items)[0]?.uid ?? null);
       if (m === "url") {
         const u = new URL(window.location.href);
         u.searchParams.set("url", payload.url ?? "");
@@ -577,7 +783,6 @@ export function SchemaValidator() {
 
   const topLevel = report?.blocks.flatMap((b) => b.items) ?? [];
   const pageIssues = (report?.issues ?? []).filter((i) => !i.item).sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
-  const selectedItem = selected ? report?.items[selected] : undefined;
 
   const tabs: { id: Tab; label: string; n?: number; s?: Severity }[] = report
     ? [
@@ -585,7 +790,7 @@ export function SchemaValidator() {
         { id: "google", label: "Google features", n: report.richResults.filter((r) => r.status === "invalid").length, s: "error" },
         { id: "content", label: "Content match", n: report.content?.filter((c) => (c.where ?? (c.found ? "page" : "missing")) === "missing").length ?? 0, s: "warning" },
         { id: "graph", label: "Entity graph", n: report.graph.edges.filter((e) => !e.resolved).length, s: "warning" },
-        { id: "source", label: "Source" },
+        { id: "source", label: "Formatted JSON-LD" },
       ]
     : [];
 
@@ -751,49 +956,7 @@ export function SchemaValidator() {
           </div>
 
           <div className="mt-6">
-            {tab === "items" && (
-              <div>
-                {pageIssues.length > 0 && (
-                  <div className="mb-6 rounded-xl border border-rule bg-white px-5 py-3">
-                    {pageIssues.map((i, k) => (
-                      <IssueLine key={k} issue={i} />
-                    ))}
-                  </div>
-                )}
-                {topLevel.length > 0 && (
-                  <div className="grid gap-6 lg:grid-cols-[18rem_1fr] lg:gap-10">
-                    <nav aria-label="Detected items">
-                      <ul className="space-y-1.5 lg:sticky lg:top-24">
-                        {topLevel.map((it) => {
-                          const t = totals.get(it.uid);
-                          return (
-                            <li key={it.uid}>
-                              <button
-                                type="button"
-                                onClick={() => setSelected(it.uid)}
-                                aria-current={selected === it.uid}
-                                className={`w-full rounded-lg border px-3.5 py-2.5 text-left transition-colors ${selected === it.uid ? "border-ink bg-white" : "border-transparent hover:bg-mist"}`}
-                              >
-                                <span className="flex items-center justify-between gap-2">
-                                  <span className="truncate font-medium">{typeLabel(it.types)}</span>
-                                  <span className="flex shrink-0 gap-1">
-                                    <Count n={t?.error ?? 0} s="error" />
-                                    <Count n={t?.warning ?? 0} s="warning" />
-                                    {!t?.error && !t?.warning && <SevIcon s="pass" className="h-4 w-4" />}
-                                  </span>
-                                </span>
-                                <span className="mt-0.5 block text-xs text-ink-soft">{FORMAT_LABEL[it.format]}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </nav>
-                    <div className="min-w-0">{selectedItem && <ItemView item={selectedItem} issuesByItem={issuesByItem} />}</div>
-                  </div>
-                )}
-              </div>
-            )}
+            {tab === "items" && <Inspector key={report.html.length + report.counts.items} report={report} issuesByItem={issuesByItem} totals={totals} pageIssues={pageIssues} />}
             {tab === "google" && <GoogleView report={report} />}
             {tab === "content" && <ContentView report={report} />}
             {tab === "graph" && <GraphView report={report} />}

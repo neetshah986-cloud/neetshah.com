@@ -32,6 +32,7 @@ const CURRENCIES = new Set(
 const URL_PROPS = new Set(["url", "image", "logo", "sameAs", "thumbnailUrl", "contentUrl", "embedUrl", "item", "mainEntityOfPage", "acquireLicensePage", "license", "hasMap", "significantLink", "relatedLink"]);
 
 type Ctx = {
+  garbled: Set<string>; // items already flagged for encoding problems
   issues: Issue[];
   byId: Map<string, Item[]>;
   edges: GraphEdge[];
@@ -91,9 +92,39 @@ function checkTypes(item: Item, ctx: Ctx, nested: boolean): string[] {
   return known;
 }
 
+// UTF-8 text decoded as Windows-1252 or Latin-1: ’ becomes â€™, é becomes Ã©, a non-breaking space becomes Â.
+const MOJIBAKE = /â€[™˜œ“”\u009d\u0153\u2122\u02dc\u201c\u201d\u2018\u2019\u2013\u2014¦¢]|Ã[\u0080-\u00bf¡-ÿ]|Â[\u00a0-\u00bf ]|ï¿½|\ufffd/;
+const repairMojibake = (s: string) => {
+  try {
+    const bytes = Uint8Array.from([...s].map((ch) => {
+      const c = ch.charCodeAt(0);
+      const cp1252: Record<number, number> = { 0x20ac: 0x80, 0x201a: 0x82, 0x192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x2c6: 0x88, 0x2030: 0x89, 0x160: 0x8a, 0x2039: 0x8b, 0x152: 0x8c, 0x17d: 0x8e, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x2dc: 0x98, 0x2122: 0x99, 0x161: 0x9a, 0x203a: 0x9b, 0x153: 0x9c, 0x17e: 0x9e, 0x178: 0x9f };
+      if (c < 256) return c;
+      if (cp1252[c] !== undefined) return cp1252[c];
+      throw new Error("not mojibake");
+    }));
+    const fixed = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return fixed !== s ? fixed : null;
+  } catch {
+    return null;
+  }
+};
+
 function checkText(item: Item, prop: string, value: string, raw: string, ranges: string[], ctx: Ctx) {
   const v = value.trim();
   const at = { item: item.uid, prop };
+  if (MOJIBAKE.test(v) && !ctx.garbled.has(item.uid)) {
+    ctx.garbled.add(item.uid);
+    const sample = v.slice(Math.max(0, v.search(MOJIBAKE) - 20), v.search(MOJIBAKE) + 30);
+    const fixed = repairMojibake(sample);
+    push(ctx, {
+      severity: "warning",
+      code: "mojibake",
+      ...at,
+      message: `${prop} contains garbled characters: "…${sample}…"`,
+      hint: `This is an encoding mistake: UTF-8 text was read as a different character set${fixed ? `, so it should read "…${fixed}…"` : ""}. Search engines and AI answers will show the garbled text. Save the content as UTF-8 and make sure the page is served with charset=utf-8.`,
+    });
+  }
   if (!v) {
     push(ctx, { severity: "warning", code: "empty-value", ...at, message: `${prop} is empty.`, hint: "Remove the property or give it a value." });
     return;
@@ -343,7 +374,7 @@ function checkValue(item: Item, prop: string, v: Value, ranges: string[], ctx: C
 export function validate(topLevel: Item[], all: Record<string, Item>) {
   const byId = new Map<string, Item[]>();
   for (const item of Object.values(all)) if (item.id) byId.set(item.id, [...(byId.get(item.id) ?? []), item]);
-  const ctx: Ctx = { issues: [], byId, edges: [], seen: new Set() };
+  const ctx: Ctx = { garbled: new Set(), issues: [], byId, edges: [], seen: new Set() };
 
   // JSON-LD merges nodes that share an @id, so an untyped {"@id": ..., "name": ...} takes the other node's type.
   for (const items of byId.values()) {

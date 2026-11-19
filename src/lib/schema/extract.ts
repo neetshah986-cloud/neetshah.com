@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { AnyNode, Element } from "domhandler";
+import { parseWithLocations, type Loc } from "./jsonpos";
 import type { Block, Issue, Item, Prop, Value } from "./types";
 
 const SCHEMA_IRI = /^https?:\/\/(www\.)?schema\.org\/?/i;
@@ -12,7 +13,10 @@ export function shortName(term: string): string {
   return t;
 }
 
-type Ctx = { next: () => string; issues: Issue[]; all: Record<string, Item> };
+type Ctx = { next: () => string; issues: Issue[]; all: Record<string, Item>; locs?: WeakMap<object, Loc> };
+
+type WithLoc = { sourceCodeLocation?: { startOffset: number; endOffset: number; startTag?: { endOffset: number } } | null };
+const locOf = (el: unknown) => (el as WithLoc).sourceCodeLocation ?? undefined;
 
 function makeCtx(): Ctx {
   let n = 0;
@@ -73,12 +77,14 @@ function jsonItem(o: Record<string, unknown>, ctx: Ctx, block: number): Item {
   const rawTypes = o["@type"] ?? o.type;
   const types = (Array.isArray(rawTypes) ? rawTypes : rawTypes ? [rawTypes] : []).map((t) => shortName(String(t)));
   const item: Item = { uid: ctx.next(), format: "json-ld", block, types, props: [] };
+  const L = ctx.locs?.get(o);
+  if (L) item.loc = { start: L.start, end: L.end };
   if (typeof o["@id"] === "string") item.id = o["@id"];
   for (const [key, val] of Object.entries(o)) {
     if (key.startsWith("@")) continue;
     const values: Value[] = [];
     jsonValue(val, ctx, block, values);
-    item.props.push({ name: shortName(key), values });
+    item.props.push({ name: shortName(key), values, at: L?.keys.get(key) });
   }
   ctx.all[item.uid] = item;
   return item;
@@ -88,11 +94,12 @@ function extractJsonLd($: cheerio.CheerioAPI, html: string, ctx: Ctx, blocks: Bl
   let searchFrom = 0;
   $('script[type="application/ld+json" i]').each((_, el) => {
     const rawText = $(el).text();
-    const at = html.indexOf(rawText, searchFrom);
+    const tagEnd = locOf(el)?.startTag?.endOffset;
+    const at = tagEnd ?? html.indexOf(rawText, searchFrom);
     const line = at >= 0 ? lineOf(html, at) : undefined;
     if (at >= 0) searchFrom = at + rawText.length;
     const index = blocks.length;
-    const block: Block = { index, format: "json-ld", line, raw: rawText.trim(), items: [] };
+    const block: Block = { index, format: "json-ld", line, start: locOf(el)?.startOffset ?? (at >= 0 ? at : undefined), raw: rawText.trim(), items: [] };
     blocks.push(block);
 
     const text = rawText.replace(/^\s*<!--/, "").replace(/-->\s*$/, "").replace(/^\s*\/\/<!\[CDATA\[/, "").replace(/\/\/\]\]>\s*$/, "").trim();
@@ -102,7 +109,11 @@ function extractJsonLd($: cheerio.CheerioAPI, html: string, ctx: Ctx, blocks: Bl
     }
     let data: unknown;
     try {
-      data = JSON.parse(text);
+      JSON.parse(text);
+      const base = at >= 0 ? at + rawText.indexOf(text) : 0;
+      const parsed = parseWithLocations(text, base);
+      data = parsed.value;
+      ctx.locs = parsed.locs;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const pos = jsonErrorPosition(msg, text);
@@ -175,6 +186,8 @@ function microdataItem($: cheerio.CheerioAPI, el: Element, ctx: Ctx, block: numb
   const $el = $(el);
   const types = ($el.attr("itemtype") ?? "").split(/\s+/).filter(Boolean).map(shortName);
   const item: Item = { uid: ctx.next(), format: "microdata", block, types, props: [] };
+  const L = locOf(el);
+  if (L) item.loc = { start: L.startOffset, end: L.endOffset };
   const itemid = $el.attr("itemid");
   if (itemid) item.id = itemid;
   seen.add(el);
@@ -187,6 +200,7 @@ function microdataItem($: cheerio.CheerioAPI, el: Element, ctx: Ctx, block: numb
   }
 
   const props = new Map<string, Value[]>();
+  const propAt = new Map<string, number>();
   const visit = (node: AnyNode, isRoot: boolean) => {
     if (node.type !== "tag" && node.type !== "script" && node.type !== "style") return;
     const e = node as Element;
@@ -200,14 +214,18 @@ function microdataItem($: cheerio.CheerioAPI, el: Element, ctx: Ctx, block: numb
           ? { kind: "text", value: "(circular reference)", raw: "string" }
           : { kind: "item", item: microdataItem($, e, ctx, block, seen) }
         : { kind: "text", value: microdataValue($, e), raw: "string" };
-      for (const n of names) props.set(n, [...(props.get(n) ?? []), value]);
+      for (const n of names) {
+        props.set(n, [...(props.get(n) ?? []), value]);
+        const o = locOf(e)?.startOffset;
+        if (o !== undefined && !propAt.has(n)) propAt.set(n, o);
+      }
     }
     if (!isRoot && hasScope) return; // a nested item owns its own descendants
     for (const child of e.children) visit(child, false);
   };
   for (const r of roots) visit(r, r === el);
 
-  for (const [name, values] of props) item.props.push({ name, values });
+  for (const [name, values] of props) item.props.push({ name, values, at: propAt.get(name) });
   ctx.all[item.uid] = item;
   return item;
 }
@@ -231,9 +249,12 @@ function rdfaItem($: cheerio.CheerioAPI, el: Element, ctx: Ctx, block: number): 
   const $el = $(el);
   const types = ($el.attr("typeof") ?? "").split(/\s+/).filter(Boolean).map(rdfaTerm);
   const item: Item = { uid: ctx.next(), format: "rdfa", block, types, props: [] };
+  const L = locOf(el);
+  if (L) item.loc = { start: L.startOffset, end: L.endOffset };
   const id = $el.attr("resource") ?? $el.attr("about");
   if (id) item.id = id;
   const props = new Map<string, Value[]>();
+  const propAt = new Map<string, number>();
 
   const visit = (node: AnyNode, isRoot: boolean) => {
     if (node.type !== "tag") return;
@@ -254,14 +275,18 @@ function rdfaItem($: cheerio.CheerioAPI, el: Element, ctx: Ctx, block: number): 
           $e.text().replace(/\s+/g, " ").trim();
         value = { kind: "text", value: v ?? "", raw: "string" };
       }
-      for (const n of property.split(/\s+/).filter(Boolean).map(rdfaTerm)) props.set(n, [...(props.get(n) ?? []), value]);
+      for (const n of property.split(/\s+/).filter(Boolean).map(rdfaTerm)) {
+        props.set(n, [...(props.get(n) ?? []), value]);
+        const o = locOf(e)?.startOffset;
+        if (o !== undefined && !propAt.has(n)) propAt.set(n, o);
+      }
     }
     if (!isRoot && hasType) return;
     for (const child of e.children) visit(child, false);
   };
   visit(el, true);
 
-  for (const [name, values] of props) item.props.push({ name, values });
+  for (const [name, values] of props) item.props.push({ name, values, at: propAt.get(name) });
   ctx.all[item.uid] = item;
   return item;
 }
@@ -279,6 +304,7 @@ function extractRdfa($: cheerio.CheerioAPI, ctx: Ctx, blocks: Block[]) {
 // ---------- Entry ----------
 
 export type Extraction = {
+  html: string; // the source as the user gave it (offsets refer to this)
   blocks: Block[];
   items: Record<string, Item>;
   issues: Issue[];
@@ -294,14 +320,30 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
   // Code mode: a bare JSON-LD object (no <script>) is accepted too.
   const trimmed = input.trim();
   let html = input;
+  let shift = 0;
   if (!opts.isFullPage && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
-    html = `<script type="application/ld+json">${input}</script>`;
+    const prefix = '<script type="application/ld+json">';
+    html = `${prefix}${input}</script>`;
+    shift = prefix.length;
   }
 
-  const $ = cheerio.load(html);
+  const $ = cheerio.load(html, { sourceCodeLocationInfo: true } as Parameters<typeof cheerio.load>[1]);
   extractJsonLd($, html, ctx, blocks);
   extractMicrodata($, ctx, blocks);
   extractRdfa($, ctx, blocks);
+
+  // A bare JSON-LD paste was wrapped in a <script> tag; point offsets back at what the user pasted.
+  if (shift) {
+    const clamp = (n: number) => Math.max(0, Math.min(input.length, n - shift));
+    for (const item of Object.values(ctx.all)) {
+      if (item.loc) item.loc = { start: clamp(item.loc.start), end: clamp(item.loc.end) };
+      for (const p of item.props) if (p.at !== undefined) p.at = clamp(p.at);
+    }
+    for (const b of blocks) {
+      if (b.start !== undefined) b.start = 0;
+      b.line = 1;
+    }
+  }
 
   let pageText: string | null = null;
   let scriptText: string | null = null;
@@ -325,6 +367,7 @@ export function extract(input: string, opts: { isFullPage: boolean }): Extractio
   }
 
   return {
+    html: input,
     blocks,
     items: ctx.all,
     issues: ctx.issues,

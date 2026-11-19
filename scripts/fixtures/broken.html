@@ -1,0 +1,39 @@
+<html><head>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {"@type": "Organization", "@id": "#org", "name": "Acme Shoes", "logo": "logo.png"},
+    {"@type": "Prodcut", "name": "Runner 2"},
+    {
+      "@type": "Product",
+      "name": "Trail Runner Pro",
+      "image": "https://example.com/shoe.jpg",
+      "brand": "Acme",
+      "price": "99",
+      "offers": {
+        "@type": "Offer",
+        "price": "₹1,299",
+        "priceCurrency": "₹",
+        "availability": "In stock",
+        "seller": {"@id": "#seller"}
+      },
+      "aggregateRating": {"@type": "AggregateRating", "ratingValue": "6", "reviewCount": "0"},
+      "Review": {"@type": "Review", "author": "Neet"}
+    },
+    {"@type": "BlogPosting", "headline": "How we test shoes", "datePublished": "20/11/2026", "dateModified": "2020-01-01", "author": {"@type": "Person", "name": "Neet Shah"}, "publisher": {"@id": "#org"}},
+    {"@type": "Event", "name": "Shoe launch", "startDate": "2026-12-05T18:00", "endDate": "2026-12-04", "eventStatus": "Scheduled", "location": "Mumbai"},
+    {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Do they fit wide feet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, they come in wide."}}]},
+    {"@type": "VideoObject", "name": "Unboxing", "duration": "1 hour"}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{ "@context": "https://schema.org", "@type": "WebSite", "name": "Acme", "url": "https://example.com", }
+</script>
+</head><body>
+<h1>Trail Runner Pro</h1><p>Only ₹1,299. Rated 4.5 by 12 people.</p><p>How we test shoes, by Neet Shah</p>
+<div itemscope itemtype="https://schema.org/Product"><span itemprop="name">Trail Runner Pro</span>
+ <div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="1299"><meta itemprop="priceCurrency" content="INR"><link itemprop="availability" href="https://schema.org/InStock"></div></div>
+<div vocab="https://schema.org/" typeof="BreadcrumbList"><span property="itemListElement" typeof="ListItem"><a property="item" href="/"><span property="name">Home</span></a><meta property="position" content="1"></span></div>
+</body></html>

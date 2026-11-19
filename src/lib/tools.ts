@@ -25,12 +25,12 @@ export const tools: Tool[] = [
   {
     slug: "schema-validator",
     name: "Schema Validator",
-    tagline: "Every JSON-LD, Microdata and RDFa item on a page, checked against schema.org.",
+    tagline: "JSON-LD, Microdata and RDFa checked against schema.org and Google's rich result rules.",
     description:
       "Paste a URL or code to extract all structured data, see required and recommended properties, and check rich result eligibility.",
     category: "Structured data",
-    signals: ["JSON-LD", "Microdata", "RDFa", "Required properties", "Rich result types"],
-    status: "in-development",
+    signals: ["JSON-LD", "Microdata", "RDFa", "Google rich results", "Visible content match", "@id graph"],
+    status: "live",
   },
   {
     slug: "ssr-vs-csr-checker",

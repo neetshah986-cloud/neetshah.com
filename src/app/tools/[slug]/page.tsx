@@ -6,7 +6,8 @@ import { site } from "@/lib/site";
 import { getTool, tools } from "@/lib/tools";
 
 export function generateStaticParams() {
-  return tools.map((t) => ({ slug: t.slug }));
+  // Live tools have their own route (e.g. /tools/schema-validator).
+  return tools.filter((t) => t.status !== "live").map((t) => ({ slug: t.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/tools/[slug]">): Promise<Metadata> {

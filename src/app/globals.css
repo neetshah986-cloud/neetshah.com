@@ -19,6 +19,7 @@
   --serp-blue: #1a3fd6;
   --pass: #0b8a57;
   --warn: #b86e00;
+  --fail: #c42b1c;
 }
 
 @theme inline {
@@ -30,6 +31,7 @@
   --color-serp: var(--serp-blue);
   --color-pass: var(--pass);
   --color-warn: var(--warn);
+  --color-fail: var(--fail);
   --font-sans: "Schibsted Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }

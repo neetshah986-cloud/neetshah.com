@@ -14,15 +14,52 @@ const unescapeJs = (s: string) =>
     .replace(/\\u([0-9a-f]{4})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
     .replace(/\\(["'/\\])/g, "$1");
 
+// Reads the value that follows `"vtp_html":` in the container: a string, or a ["template", ...] array of
+// strings and macros. Returns the concatenated string literals.
+function readHtmlValue(js: string, start: number): string {
+  let i = start;
+  while (/\s/.test(js[i] ?? "")) i++;
+  const readString = (): string => {
+    const quote = js[i++];
+    let out = "";
+    while (i < js.length && js[i] !== quote) {
+      if (js[i] === "\\") {
+        out += js[i] + (js[i + 1] ?? "");
+        i += 2;
+      } else out += js[i++];
+    }
+    i++;
+    return out;
+  };
+  if (js[i] === '"' || js[i] === "'") return readString();
+  if (js[i] !== "[") return "";
+  let depth = 0;
+  let out = "";
+  const limit = Math.min(js.length, start + 200_000);
+  while (i < limit) {
+    const c = js[i];
+    if (c === '"' || c === "'") out += readString();
+    else {
+      if (c === "[") depth++;
+      if (c === "]" && --depth === 0) break;
+      i++;
+    }
+  }
+  return out;
+}
+
+// Only JSON-LD inside Custom HTML tags counts. GTM's own runtime also mentions application/ld+json
+// (it reads existing markup for ecommerce), which is not structured data added through GTM.
 export function schemaInContainer(js: string): { schemaTags: number; types: string[] } {
-  const text = unescapeJs(js);
-  const tags = text.match(/application\/ld\+json/gi)?.length ?? 0;
-  if (!tags) return { schemaTags: 0, types: [] };
-  // Types declared inside those tags, e.g. "@type":"Organization"
+  let schemaTags = 0;
   const types = new Set<string>();
-  for (const m of text.matchAll(/application\/ld\+json[\s\S]{0,20000}?<\/script>/gi))
-    for (const t of m[0].matchAll(/"@type"\s*:\s*"([A-Za-z]+)"/g)) types.add(t[1]);
-  return { schemaTags: tags, types: [...types].slice(0, 12) };
+  for (const m of js.matchAll(/"vtp_html"\s*:/g)) {
+    const html = unescapeJs(readHtmlValue(js, m.index! + m[0].length));
+    if (!/application\/ld\+json/i.test(html)) continue;
+    schemaTags++;
+    for (const t of html.matchAll(/"@type"\s*:\s*"([A-Za-z]+)"/g)) types.add(t[1]);
+  }
+  return { schemaTags, types: [...types].slice(0, 12) };
 }
 
 export async function inspectGtm(html: string): Promise<GtmContainer[]> {

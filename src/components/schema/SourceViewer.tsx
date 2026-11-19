@@ -92,7 +92,7 @@ export function SourceViewer({
   useEffect(() => {
     const el = box.current;
     if (!el || focusLine < 0) return;
-    el.scrollTo({ top: Math.max(0, focusLine * LINE_H - el.clientHeight / 3), left: 0, behavior: "smooth" });
+    el.scrollTo({ top: Math.max(0, focusLine * LINE_H - el.clientHeight / 3), left: 0 });
   }, [focusLine, focus?.at, focus?.start]);
 
   const first = Math.max(0, Math.floor(scrollTop / LINE_H) - 30);

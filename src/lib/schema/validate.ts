@@ -42,6 +42,8 @@ const push = (ctx: Ctx, issue: Issue) => ctx.issues.push(issue);
 const nodeKey = (item: Item) => item.id ?? item.uid;
 
 function checkTypes(item: Item, ctx: Ctx, nested: boolean): string[] {
+  // A nested node identified by @id doesn't need a type (Google's breadcrumb examples use {"@id": url, "name": ...}).
+  if (item.types.length === 0 && nested && item.id) return [];
   if (item.types.length === 0) {
     push(ctx, {
       severity: nested ? "warning" : "error",

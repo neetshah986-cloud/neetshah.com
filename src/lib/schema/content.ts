@@ -123,7 +123,7 @@ export function contentChecks(topLevel: Item[], all: Record<string, Item>, pageT
     const target = TARGETS.find((t) => item.types.some((ty) => getClass(ty) && t.types.some((r) => isA(ty, r))));
     if (!target) continue;
     for (const path of target.paths)
-      for (const value of collect(item, path, byId).slice(0, 5)) {
+      for (const value of collect(item, path, byId).slice(0, 100)) {
         const key = `${item.uid}|${path}|${value}`;
         if (seen.has(key)) continue;
         seen.add(key);

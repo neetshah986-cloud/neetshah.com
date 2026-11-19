@@ -65,6 +65,7 @@ export type Rendering = {
   tagManager: boolean; // Google Tag Manager is installed (schema may be injected through it)
   emptyAppShell: boolean; // the body is an empty <div id="root|app|__next"> filled by JavaScript
   csrValues: number; // structured data values that only appear after JavaScript
+  missingValues: number; // structured data values that aren't in the HTML at all
   framework?: string;
 };
 

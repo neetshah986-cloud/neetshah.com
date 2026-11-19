@@ -201,7 +201,7 @@ function GoogleView({ report }: { report: Report }) {
 const WHERE = {
   page: { label: "On the page", tone: "text-pass", icon: "pass" as const },
   js: { label: "Only after JavaScript", tone: "text-serp", icon: "info" as const },
-  missing: { label: "Not on the page", tone: "text-warn", icon: "warning" as const },
+  missing: { label: "Not in the page HTML", tone: "text-warn", icon: "warning" as const },
 };
 
 function ContentView({ report }: { report: Report }) {
@@ -221,8 +221,25 @@ function ContentView({ report }: { report: Report }) {
       <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-1 font-medium">
         <li className="text-pass">{total - missing - js} on the page</li>
         {js > 0 && <li className="text-serp">{js} only after JavaScript</li>}
-        <li className={missing ? "text-warn" : "text-ink-soft"}>{missing} not on the page</li>
+        <li className={missing ? "text-warn" : "text-ink-soft"}>{missing} not in the page HTML</li>
       </ul>
+      {missing > 0 && (
+        <details className="mt-5 max-w-3xl rounded-xl border border-rule bg-white px-5 py-4 text-[0.95rem] leading-relaxed">
+          <summary className="cursor-pointer font-semibold">What &ldquo;not in the page HTML&rdquo; means, and how to double-check</summary>
+          <p className="mt-2 text-ink-soft">
+            These values are in your structured data but not in the HTML {report.source.kind === "url" ? "the server sent" : "you pasted"}, either as visible text or as JavaScript data. Usually that means they aren&apos;t shown to visitors at all, which goes against Google&apos;s guidelines. Some sites, though, load sections such as FAQs from a separate request after the page opens, and this tool doesn&apos;t run JavaScript, so it can&apos;t see those.
+          </p>
+          <p className="mt-3 font-medium">To check against what visitors actually see:</p>
+          <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-ink-soft">
+            <li>Open the page in Chrome and expand any &ldquo;View more&rdquo; or accordion sections.</li>
+            <li>Open DevTools (F12), right-click the <code className="font-mono text-[0.85em]">&lt;html&gt;</code> element in the Elements panel, and choose Copy &gt; Copy outerHTML.</li>
+            <li>Paste it into Paste code above and validate. Content match then compares against the rendered page.</li>
+          </ol>
+          <p className="mt-3 text-ink-soft">
+            Anything still missing then isn&apos;t visible to users. Anything that now appears is rendered by JavaScript, so it&apos;s worth server-rendering for crawlers that don&apos;t run JavaScript.
+          </p>
+        </details>
+      )}
       {js > 0 && (
         <div className="mt-5 max-w-3xl rounded-xl border border-serp/25 bg-serp/5 px-5 py-4 text-[0.95rem] leading-relaxed">
           <p className="font-semibold">Some content is added by JavaScript</p>
@@ -372,8 +389,15 @@ function renderingRows(r: Rendering): Row[] {
       title: `${r.csrValues} value${r.csrValues === 1 ? "" : "s"} in your markup only appear${r.csrValues === 1 ? "s" : ""} after JavaScript runs`,
       body: `The content your structured data describes is rendered in the browser (CSR), not sent by the server. Google usually sees it after rendering, but rendering can be delayed, and many other crawlers and AI assistants read only the raw HTML. Best practice: server-side render (SSR) this content so the visible text and the markup arrive together.${ssrFix} Details are under Content match.`,
     });
-  else if (r.schemaInServerHtml)
+  else if (r.schemaInServerHtml && !r.missingValues)
     rows.push({ s: "pass", title: "The content your markup describes is in the server HTML", body: "Nothing it relies on needs JavaScript to appear." });
+
+  if (r.missingValues > 0)
+    rows.push({
+      s: "warning",
+      title: `${r.missingValues} value${r.missingValues === 1 ? " in your markup isn't" : "s in your markup aren't"} in the page HTML at all`,
+      body: "They're either not shown to visitors, which goes against Google's guidelines, or loaded later by JavaScript from a separate request, which this tool can't run. Content match explains how to check against the rendered page. Either way, the content your structured data describes should be in the server HTML.",
+    });
 
   return rows;
 }
@@ -437,7 +461,7 @@ function plainReport(report: Report): string {
   }
   const missing = report.content?.filter((c) => c.where === "missing") ?? [];
   if (missing.length) {
-    lines.push("IN STRUCTURED DATA BUT NOT VISIBLE ON THE PAGE");
+    lines.push("IN STRUCTURED DATA BUT NOT IN THE PAGE HTML (not shown to users, or loaded later by JavaScript)");
     for (const c of missing) lines.push(`- ${c.prop}: ${c.value.slice(0, 120)}`);
     lines.push("");
   }

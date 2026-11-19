@@ -33,6 +33,7 @@ export function analyse(html: string, source: Report["source"]): Report {
           tagManager: x.hints.usesTagManager,
           emptyAppShell: x.hints.isJsApp,
           csrValues: content?.filter((c) => c.where === "js").length ?? 0,
+          missingValues: content?.filter((c) => c.where === "missing").length ?? 0,
           framework: x.hints.framework,
         }
       : null;

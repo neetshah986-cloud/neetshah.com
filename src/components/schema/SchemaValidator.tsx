@@ -662,7 +662,7 @@ function RenderingPanel({ r }: { r: Rendering }) {
 
 // ---------- Archived copy notice ----------
 
-function ArchivedNote({ a }: { a: NonNullable<Report["source"]["archived"]> }) {
+function ArchivedNote({ a, liveUrl, onPasteCode }: { a: NonNullable<Report["source"]["archived"]>; liveUrl?: string; onPasteCode: () => void }) {
   const days = a.ageDays;
   const date = new Date(a.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const old = days > 30;
@@ -678,8 +678,41 @@ function ArchivedNote({ a }: { a: NonNullable<Report["source"]["archived"]> }) {
           View the archived copy
         </a>
       </p>
+
+      <div className="mt-3 border-t border-rule/70 pt-3">
+        <p className="font-medium">To check the live page instead</p>
+        <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-ink-soft">
+          <li>
+            {liveUrl ? (
+              <a href={liveUrl} target="_blank" rel="noopener nofollow" className="text-serp hover:underline">
+                Open the live page
+              </a>
+            ) : (
+              "Open the page"
+            )}{" "}
+            in your browser.
+          </li>
+          <li>
+            Press <Kbd>Ctrl</Kbd> + <Kbd>U</Kbd> to view its source (<Kbd>Cmd</Kbd> + <Kbd>Option</Kbd> + <Kbd>U</Kbd> on a Mac).
+          </li>
+          <li>
+            Select everything with <Kbd>Ctrl</Kbd> + <Kbd>A</Kbd> and copy it with <Kbd>Ctrl</Kbd> + <Kbd>C</Kbd> (<Kbd>Cmd</Kbd> + <Kbd>A</Kbd>, <Kbd>Cmd</Kbd> + <Kbd>C</Kbd> on a Mac).
+          </li>
+          <li>
+            Come back here,{" "}
+            <button type="button" onClick={onPasteCode} className="font-medium text-serp hover:underline">
+              switch to Paste code
+            </button>
+            , paste with <Kbd>Ctrl</Kbd> + <Kbd>V</Kbd> and select Validate code.
+          </li>
+        </ol>
+      </div>
     </div>
   );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border border-rule bg-white px-1.5 py-px font-mono text-[0.8em] text-ink shadow-[0_1px_0_#D9E0EA]">{children}</kbd>;
 }
 
 // ---------- Report for developers ----------
@@ -911,7 +944,18 @@ export function SchemaValidator() {
                   <p className="mt-1 text-sm text-ink-soft">
                     HTTP {report.source.status} · {((report.source.bytes ?? 0) / 1024).toFixed(0)} KB · fetched in {((report.source.ms ?? 0) / 1000).toFixed(1)}s
                   </p>
-                  {report.source.archived && <ArchivedNote a={report.source.archived} />}
+                  {report.source.archived && (
+                    <ArchivedNote
+                      a={report.source.archived}
+                      liveUrl={report.source.finalUrl}
+                      onPasteCode={() => {
+                        setMode("code");
+                        setCode("");
+                        window.scrollTo({ top: 0 });
+                        setTimeout(() => document.getElementById("sv-code")?.focus(), 50);
+                      }}
+                    />
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-ink-soft">Pasted code</p>

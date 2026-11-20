@@ -1,6 +1,6 @@
 // The root cause behind each metric, in plain language.
 import { formatMetric, formatMs, METRICS, type MetricKey, type Rating } from "./metrics";
-import { clsCauses, isThirdParty, shortUrl, toNode, type Ctx } from "./fixes";
+import { clsCauses, isThirdParty, scriptName, toNode, type Ctx } from "./fixes";
 import type { Diagnosis, FieldData, Finding, MetricValue, Phase } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -27,6 +27,10 @@ const PHASES: Record<string, { label: string; tip: string; audits: string[] }> =
   },
 };
 
+function clip(t: string, n = 60) {
+  return t.length > n ? `${t.slice(0, n).trimEnd()}…` : t;
+}
+
 function table(a: any) {
   return (a?.details?.items ?? []).find((i: any) => i.type === "table")?.items ?? [];
 }
@@ -51,7 +55,7 @@ function lcp(c: Ctx, m: MetricValue | undefined, findings: Finding[]): Diagnosis
     main: r === biggest,
   }));
   const isImage = /^<(img|image|video|svg)\b/i.test(node?.snippet ?? "") || raw.some((r: any) => r.subpart === "resourceLoadDuration");
-  const what = node ? (isImage ? "the main image" : `the text "${(node.label || "").slice(0, 60)}"`) : "the largest element";
+  const what = node ? (isImage ? "the main image" : `the text "${clip(node.label || "")}"`) : "the largest element";
   let headline = `LCP is ${m.display}. Google measures it on ${what}.`;
   let detail = "";
   const disc = (c.audits["lcp-discovery-insight"]?.details?.items ?? []).find((i: any) => i.type === "checklist")?.items ?? {};
@@ -92,8 +96,8 @@ function cls(c: Ctx, m: MetricValue | undefined, findings: Finding[]): Diagnosis
   if (m.rating !== "good" && top) {
     const moved = top.node?.label || top.node?.selector || "An element";
     headline = cause
-      ? `"${moved.slice(0, 60)}" jumps while the page loads. Cause: ${cause.text.toLowerCase()}${cause.node ? ` (${cause.node.selector})` : ""}.`
-      : `"${moved.slice(0, 60)}" jumps while the page loads, because something above it appears or changes size after it's shown.`;
+      ? `"${clip(moved)}" jumps while the page loads. Cause: ${cause.text.toLowerCase()}${cause.node ? ` (${cause.node.selector})` : ""}.`
+      : `"${clip(moved)}" jumps while the page loads, because something above it appears or changes size after it's shown.`;
     detail = "Reserve space for anything that loads late: images need width and height, ads and embeds need a fixed slot, and fonts need a matching fallback.";
   }
   return {
@@ -112,7 +116,7 @@ function scripts(c: Ctx) {
   return (c.audits["bootup-time"]?.details?.items ?? [])
     .filter((i: any) => i.url && i.url !== "Unattributable")
     .slice(0, 5)
-    .map((i: any) => ({ url: shortUrl(i.url, c.origin), ms: i.total, thirdParty: isThirdParty(i.url, c.origin) }));
+    .map((i: any) => ({ url: scriptName(i.url, c), ms: i.total, thirdParty: isThirdParty(i.url, c.origin) }));
 }
 
 function tbt(c: Ctx, m: MetricValue | undefined, findings: Finding[], key: "TBT" | "INP" = "TBT"): Diagnosis | null {
@@ -124,7 +128,7 @@ function tbt(c: Ctx, m: MetricValue | undefined, findings: Finding[], key: "TBT"
   let headline = key === "INP" ? `Real visitors wait ${m.display} for the page to react to a tap or click.` : `JavaScript blocks the page for ${m.display}.`;
   let detail = m.rating === "good" ? "No action needed. The page stays responsive." : "";
   if (m.rating !== "good" && top) {
-    headline += ` The biggest cause is ${top.url}, which runs for ${formatMs(top.ms)}.`;
+    headline += /^Inline/.test(top.url) ? ` The biggest cause is the inline JavaScript in the page HTML, which runs for ${formatMs(top.ms)}.` : ` The biggest cause is ${top.url}, which runs for ${formatMs(top.ms)}.`;
     detail = tp / all > 0.4 ? `Third-party scripts account for ${Math.round((tp / all) * 100)}% of the script time, so start with tags you can remove or delay.` : "Most of the script time is your own code: defer what isn't needed for the first screen and split large bundles.";
     if (key === "INP") detail += " INP is measured on real interactions, so the lab shows the scripts most likely to be in the way.";
   }
@@ -133,13 +137,13 @@ function tbt(c: Ctx, m: MetricValue | undefined, findings: Finding[], key: "TBT"
 
 function fcp(c: Ctx, m: MetricValue | undefined, findings: Finding[]): Diagnosis | null {
   if (!m) return null;
-  const rb = (c.audits["render-blocking-insight"]?.details?.items ?? []).reduce((s: number, i: any) => s + (i.wastedMs ?? 0), 0);
+  const rb = Math.max(0, ...(c.audits["render-blocking-insight"]?.details?.items ?? []).map((i: any) => i.wastedMs ?? 0));
   const ttfb = c.labValue.TTFB ?? 0;
   let headline = `FCP is ${m.display}.`;
   let detail = m.rating === "good" ? "No action needed. Something appears on screen quickly." : "";
   if (m.rating !== "good") {
     if (rb > ttfb && rb > 300) {
-      headline = `The screen stays blank mainly because ${(c.audits["render-blocking-insight"]?.details?.items ?? []).length} CSS and JavaScript files must load first (about ${formatMs(rb)}).`;
+      headline = `The screen stays blank mainly because ${(c.audits["render-blocking-insight"]?.details?.items ?? []).length} CSS and JavaScript files must load first; the slowest takes ${formatMs(rb)}.`;
       detail = "Defer scripts and inline the critical CSS so the first screen can be drawn sooner.";
     } else if (ttfb > 600) {
       headline = `The screen stays blank mainly because the server takes ${formatMs(ttfb)} to respond.`;

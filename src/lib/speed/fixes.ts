@@ -71,6 +71,28 @@ export function shortUrl(url: string, origin: string): string {
   }
 }
 
+/** URLs inside code samples: a path for the same origin, otherwise the full URL so it still works when pasted. */
+export function codeUrl(url: string, origin: string): string {
+  try {
+    const u = new URL(url);
+    return u.origin === origin ? u.pathname + u.search : u.href;
+  } catch {
+    return url;
+  }
+}
+
+/** Inline scripts are reported against the page URL itself. */
+export function scriptName(url: string, c: { origin: string; pageUrl: string }): string {
+  try {
+    const u = new URL(url);
+    const p = new URL(c.pageUrl);
+    if (u.origin === p.origin && u.pathname === p.pathname) return "Inline scripts in the page HTML";
+  } catch {
+    /* not a URL */
+  }
+  return shortUrl(url, c.origin);
+}
+
 function escapeAttr(v: string) {
   return v.replace(/"/g, "&quot;");
 }
@@ -186,7 +208,7 @@ const lcpDiscovery: Builder = (a, c) => {
   if (bad.includes("requestDiscoverable")) {
     problems.push("It isn't in the HTML the server sends (it's a CSS background image or added by JavaScript), so the browser finds it late.");
     const href = src ?? c.lcpUrl ?? "/images/hero.webp";
-    code.push({ label: "Add to the <head>, before your stylesheets", lang: "html", code: `<link rel="preload" as="image" href="${shortUrl(href, c.origin)}" fetchpriority="high">` });
+    code.push({ label: "Add to the <head>, before your stylesheets", lang: "html", code: `<link rel="preload" as="image" href="${codeUrl(href, c.origin)}" fetchpriority="high">` });
     steps.push("Put the image in the HTML as a normal <img>, or preload it from the <head> so the browser starts downloading it straight away.");
   }
   steps.push("WordPress: exclude this image from your lazy-load or optimisation plugin. Next.js: add the priority prop to its <Image>.");
@@ -215,7 +237,7 @@ const renderBlocking: Builder = (a, c) => {
   const steps: string[] = [];
   if (js.length) {
     steps.push("Add defer to scripts that aren't needed to show the first screen. They still run, but after the HTML is parsed, in the same order.");
-    code.push({ label: "Scripts: add defer", lang: "html", code: js.map((i) => scriptTag(shortUrl(i.url, c.origin))).join("\n") });
+    code.push({ label: "Scripts: add defer", lang: "html", code: js.map((i) => scriptTag(codeUrl(i.url, c.origin))).join("\n") });
   }
   const gf = css.filter((i) => /fonts\.googleapis\.com/.test(i.url));
   const own = css.filter((i) => !gf.includes(i));
@@ -227,7 +249,7 @@ const renderBlocking: Builder = (a, c) => {
       code: [
         "<style>/* Critical CSS: only what the first screen needs */</style>",
         ...own.map((i) => {
-          const u = shortUrl(i.url, c.origin);
+          const u = codeUrl(i.url, c.origin);
           return `<link rel="preload" href="${u}" as="style" onload="this.onload=null;this.rel='stylesheet'">\n<noscript><link rel="stylesheet" href="${u}"></noscript>`;
         }),
       ].join("\n"),
@@ -242,10 +264,10 @@ const renderBlocking: Builder = (a, c) => {
     });
   }
   steps.push("WordPress: a performance plugin's \"defer JavaScript\" and \"critical CSS\" options do this. Test the page afterwards, as some scripts must stay in order.");
-  const total = items.reduce((s, i) => s + (i.wastedMs ?? 0), 0);
+  const longest = Math.max(...items.map((i) => i.wastedMs ?? 0));
   return base(a, {
     title: "Stop CSS and JavaScript from blocking the first paint",
-    summary: `${items.length} file${items.length > 1 ? "s" : ""} must download before the browser can show anything, holding the page blank for about ${formatMs(total)}.`,
+    summary: `${items.length} file${items.length > 1 ? "s" : ""} must download before the browser can show anything. The slowest takes ${formatMs(longest)}, and the screen stays blank until it arrives.`,
     why: "Until these files arrive, the screen stays empty. Visitors on mobile networks see a white page and some leave before anything appears.",
     metrics: metricsOf(a, ["FCP", "LCP"]),
     savingsMs: Math.max(savings(a).FCP, savings(a).LCP) || undefined,
@@ -326,7 +348,7 @@ const imageDelivery: Builder = (a, c) => {
     );
     resources.push({ url: i.url, bytes: i.totalBytes, wastedBytes: i.wastedBytes, note: plain.join(" "), thirdParty: isThirdParty(i.url, c.origin) });
     if (node && /^<img\b/i.test(node.snippet)) {
-      const src = getAttr(node.snippet, "src") ?? shortUrl(i.url, c.origin);
+      const src = getAttr(node.snippet, "src") ?? codeUrl(i.url, c.origin);
       const nat = c.natural.get(i.url);
       const displayW = (node.rect?.width ?? 600) * c.dpr;
       const { stem, widths, srcset } = srcsetFor(src, displayW, nat?.[0]);
@@ -415,7 +437,7 @@ const fontDisplay: Builder = (a, c) => {
   if (!failing(a)) return null;
   const items = rows(a).filter((i) => i.url);
   if (!items.length) return null;
-  const first = shortUrl(items[0].url, c.origin);
+  const first = codeUrl(items[0].url, c.origin);
   const format = /\.woff2/i.test(first) ? "woff2" : /\.woff/i.test(first) ? "woff" : "truetype";
   return base(a, {
     title: "Show text while web fonts load",
@@ -503,7 +525,8 @@ const layoutShift: Builder = (a, c) => {
         });
         steps.add("Add width and height attributes to images (the real pixel size). CSS can still make them responsive with height: auto.");
       } else if (/font/i.test(cause.text)) {
-        if (cause.node) elements.push({ node: cause.node, note: "Text reflowed when the web font loaded, because the fallback font is a different size." });
+        const n = cause.node ?? s.node;
+        if (n && !elements.some((e) => e.node.path === n.path)) elements.push({ node: n, note: "This text reflowed when the web font loaded, because the fallback font is a different size." });
         steps.add("Match the fallback font's size to your web font with size-adjust, or preload the font so it's ready before the text is drawn.");
         if (!code.some((b) => b.label.startsWith("Fallback")))
           code.push({ label: "Fallback font that matches your web font's size", lang: "css", code: '@font-face {\n  font-family: "YourFont Fallback";\n  src: local("Arial");\n  size-adjust: 105%; /* tune until the text lines up */\n}\nbody { font-family: "YourFont", "YourFont Fallback", sans-serif; }' });
@@ -513,6 +536,7 @@ const layoutShift: Builder = (a, c) => {
         if (!code.some((b) => b.label.startsWith("Reserve")))
           code.push({ label: "Reserve space for an embed or ad slot", lang: "css", code: ".embed-slot {\n  aspect-ratio: 16 / 9; /* or min-height: 250px; for an ad */\n  width: 100%;\n}" });
       } else if (cause.node) elements.push({ node: cause.node, note: cause.text });
+      else if (s.node && !elements.some((e) => e.node.path === s.node!.path)) elements.push({ node: s.node, note: `${cause.text}: this element moved (shift score ${s.score.toFixed(3)}).` });
     }
   }
   if (!elements.length) return null;
@@ -557,11 +581,11 @@ const jsExecution: Builder = (a, c) => {
   if (!items.length) return null;
   const longTasks = rows(c.audits["long-tasks"]).length;
   const top = items[0];
-  const resources = items.slice(0, 8).map((i) => ({ url: i.url, ms: i.total, note: `${formatMs(i.scripting ?? 0)} running, ${formatMs(i.scriptParseCompile ?? 0)} parsing`, thirdParty: isThirdParty(i.url, c.origin) }));
+  const resources = items.slice(0, 8).map((i) => ({ url: /^Inline/.test(scriptName(i.url, c)) ? "Inline scripts in the page HTML" : i.url, ms: i.total, note: `${formatMs(i.scripting ?? 0)} running, ${formatMs(i.scriptParseCompile ?? 0)} parsing`, thirdParty: isThirdParty(i.url, c.origin) }));
   const nonEssential = resources.find((r) => r.thirdParty) ?? resources[1] ?? resources[0];
   return base(a, {
     title: "Cut the JavaScript that keeps the page busy",
-    summary: `Scripts keep the browser busy for ${formatMs(items.reduce((s, i) => s + (i.total ?? 0), 0))}${longTasks ? ` in ${longTasks} long task${longTasks > 1 ? "s" : ""}` : ""}. The biggest is ${shortUrl(top.url, c.origin)} at ${formatMs(top.total)}.`,
+    summary: `Scripts keep the browser busy for ${formatMs(items.reduce((s, i) => s + (i.total ?? 0), 0))}${longTasks ? ` in ${longTasks} long task${longTasks > 1 ? "s" : ""}` : ""}. The biggest is ${scriptName(top.url, c)} at ${formatMs(top.total)}.`,
     why: "While JavaScript runs, the page can't respond to taps or clicks. That's what Total Blocking Time measures in the lab and Interaction to Next Paint (INP) measures for real users.",
     metrics: ["TBT", "INP"],
     savingsMs: savings(a).TBT || undefined,
@@ -576,7 +600,7 @@ const jsExecution: Builder = (a, c) => {
       {
         label: "Load a non-essential script only after the first interaction",
         lang: "js",
-        code: `let loaded = false;\nfunction loadLater() {\n  if (loaded) return;\n  loaded = true;\n  const s = document.createElement("script");\n  s.src = "${nonEssential ? (nonEssential.thirdParty ? nonEssential.url : shortUrl(nonEssential.url, c.origin)) : "/js/widget.js"}";\n  s.async = true;\n  document.head.append(s);\n}\n["pointerdown", "keydown", "scroll"].forEach((e) => addEventListener(e, loadLater, { once: true, passive: true }));`,
+        code: `let loaded = false;\nfunction loadLater() {\n  if (loaded) return;\n  loaded = true;\n  const s = document.createElement("script");\n  s.src = "${nonEssential && !/^Inline/.test(scriptName(nonEssential.url, c)) ? codeUrl(nonEssential.url, c.origin) : "/js/widget.js"}";\n  s.async = true;\n  document.head.append(s);\n}\n["pointerdown", "keydown", "scroll"].forEach((e) => addEventListener(e, loadLater, { once: true, passive: true }));`,
       },
     ],
     owner: "Developer",
@@ -688,7 +712,7 @@ const dependencyTree: Builder = (a, c) => {
     code: origins.length
       ? [{ label: "Preconnect, in the <head>", lang: "html", code: origins.slice(0, 4).map((o) => `<link rel="preconnect" href="${o}" crossorigin>`).join("\n") }]
       : chain.some((x) => /\.woff2?(\?|$)/i.test(x.url))
-        ? [{ label: "Preload the font, in the <head>", lang: "html", code: `<link rel="preload" href="${shortUrl(chain.find((x) => /\.woff2?(\?|$)/i.test(x.url))!.url, c.origin)}" as="font" type="font/woff2" crossorigin>` }]
+        ? [{ label: "Preload the font, in the <head>", lang: "html", code: `<link rel="preload" href="${codeUrl(chain.find((x) => /\.woff2?(\?|$)/i.test(x.url))!.url, c.origin)}" as="font" type="font/woff2" crossorigin>` }]
         : [],
     owner: "Developer",
   });

@@ -44,7 +44,8 @@ async function assertPublic(url: URL) {
 
 export type FetchedPage = { finalUrl: string; status: number; html: string; bytes: number; ms: number; redirects: string[] };
 
-export async function fetchPage(input: string, opts: { accept?: "html" | "script" } = {}): Promise<FetchedPage> {
+export async function fetchPage(input: string, opts: { accept?: "html" | "script" | "json"; timeoutMs?: number } = {}): Promise<FetchedPage> {
+  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   if (/^[a-z][a-z0-9+.-]*:/i.test(input.trim()) && !/^https?:\/\//i.test(input.trim()))
     throw new FetchError("Only http:// and https:// URLs can be checked.");
   let url: URL;
@@ -62,15 +63,13 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
     try {
       res = await fetch(url, {
         redirect: "manual",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { "user-agent": BOT_UA, accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5", "accept-language": "en" },
       });
     } catch (e) {
       const timeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       throw new FetchError(
-        timeout
-          ? "The site didn't respond within 15 seconds. Many sites hold automated requests open like this to block them. Open the page in your browser, view its source (Ctrl+U, or Cmd+Option+U on a Mac), copy it all, and check it with Paste code instead."
-          : `Couldn't connect to ${url.hostname}.`,
+        timeout ? `${url.hostname} didn't respond within ${timeoutMs / 1000} seconds.` : `Couldn't connect to ${url.hostname}.`,
         504,
       );
     }
@@ -82,7 +81,7 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
     }
 
     const type = res.headers.get("content-type") ?? "";
-    const okType = opts.accept === "script" ? /javascript|ecmascript|text\/plain/i : /html|xml/i;
+    const okType = opts.accept === "script" ? /javascript|ecmascript|text\/plain/i : opts.accept === "json" ? /json/i : /html|xml/i;
     if (type && !okType.test(type)) throw new FetchError(`That URL returned ${type.split(";")[0]}, not an HTML page.`, 422);
 
     const reader = res.body?.getReader();
@@ -90,7 +89,13 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
     let bytes = 0;
     if (reader) {
       for (;;) {
-        const { done, value } = await reader.read();
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch {
+          throw new FetchError(`${url.hostname} didn't finish sending the page within ${timeoutMs / 1000} seconds.`, 504);
+        }
+        const { done, value } = chunk;
         if (done) break;
         bytes += value.byteLength;
         if (bytes > MAX_BYTES) {

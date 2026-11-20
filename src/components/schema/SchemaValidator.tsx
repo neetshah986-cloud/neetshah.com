@@ -660,12 +660,35 @@ function RenderingPanel({ r }: { r: Rendering }) {
   );
 }
 
+// ---------- Archived copy notice ----------
+
+function ArchivedNote({ a }: { a: NonNullable<Report["source"]["archived"]> }) {
+  const days = a.ageDays;
+  const date = new Date(a.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  const old = days > 30;
+  return (
+    <div className={`mt-3 max-w-3xl rounded-lg border px-4 py-3 text-[0.93rem] leading-relaxed ${old ? "border-warn/30 bg-warn/5" : "border-serp/25 bg-serp/5"}`}>
+      <p className="font-medium">
+        Checked the Internet Archive&apos;s copy from {date} ({days === 0 ? "today" : days === 1 ? "1 day old" : `${days} days old`})
+      </p>
+      <p className="mt-0.5 text-ink-soft">
+        The site {a.reason}, which is how many sites block automated requests, so the latest archived copy of the page was checked instead.
+        {old ? " It's more than a month old, so recent changes to the page won't show." : " Changes made since then won't show."}{" "}
+        <a href={a.snapshotUrl} target="_blank" rel="noopener nofollow" className="text-serp hover:underline">
+          View the archived copy
+        </a>
+      </p>
+    </div>
+  );
+}
+
 // ---------- Report for developers ----------
 
 function plainReport(report: Report): string {
   const lines: string[] = [];
   lines.push(`Structured data report: ${report.source.finalUrl ?? report.source.url ?? "pasted code"}`);
   lines.push(`Checked with SEO People Hub's Schema Validator (schema.org ${report.vocabVersion})`);
+  if (report.source.archived) lines.push(`Note: the site blocked automated requests, so this checks the Internet Archive's copy from ${report.source.archived.date.slice(0, 10)} (${report.source.archived.snapshotUrl}).`);
   lines.push(`${report.counts.errors} errors, ${report.counts.warnings} warnings, ${report.counts.info} notes`, "");
   if (report.rendering) {
     const rows = renderingRows(report.rendering).filter((x) => x.s !== "pass");
@@ -888,6 +911,7 @@ export function SchemaValidator() {
                   <p className="mt-1 text-sm text-ink-soft">
                     HTTP {report.source.status} · {((report.source.bytes ?? 0) / 1024).toFixed(0)} KB · fetched in {((report.source.ms ?? 0) / 1000).toFixed(1)}s
                   </p>
+                  {report.source.archived && <ArchivedNote a={report.source.archived} />}
                 </>
               ) : (
                 <p className="text-sm text-ink-soft">Pasted code</p>

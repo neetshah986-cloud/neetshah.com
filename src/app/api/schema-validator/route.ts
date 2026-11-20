@@ -1,4 +1,5 @@
-import { FetchError, fetchPage, rateLimited } from "@/lib/safe-fetch";
+import { fetchArchived, waybackDate } from "@/lib/archive";
+import { FetchError, fetchPage, rateLimited, type FetchedPage } from "@/lib/safe-fetch";
 import { analyse } from "@/lib/schema";
 import { inspectGtm } from "@/lib/schema/gtm";
 
@@ -25,26 +26,68 @@ export async function POST(request: Request) {
 
     const url = String(body.url ?? "").trim();
     if (!url) return Response.json({ error: "Enter a URL to check." }, { status: 400 });
-    const page = await fetchPage(url);
-    const report = analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status, bytes: page.bytes, ms: page.ms });
-    if (report.rendering?.tagManager) report.rendering.gtm = await inspectGtm(page.html);
-    const looksBlocked = [202, 401, 403, 429, 503].includes(page.status) && Object.keys(report.items).length === 0;
+    const started = Date.now();
+    const BLOCKED = [202, 401, 403, 406, 429, 503];
+    let page: FetchedPage | null = null;
+    let reason = "";
+    try {
+      page = await fetchPage(url, { timeoutMs: 10_000 });
+      if (BLOCKED.includes(page.status) && !/application\/ld\+json|itemscope|typeof=/i.test(page.html)) reason = `returned HTTP ${page.status} to this tool`;
+    } catch (e) {
+      // Timeouts and dropped connections are how many bot walls answer automated requests.
+      if (!(e instanceof FetchError) || e.status !== 504) throw e;
+      reason = "didn't respond to this tool";
+    }
+
+    // The site blocked us: check the Internet Archive's latest copy instead.
+    let archived: Awaited<ReturnType<typeof fetchArchived>> = null;
+    if (reason) {
+      archived = await fetchArchived(url);
+      if (!archived) {
+        if (page) {
+          // fall through and report the block on the page we did get
+        } else
+          throw new FetchError(
+            "This site blocks automated requests, and the Internet Archive doesn't have a copy of this page to check instead. Use Paste code with the page source, or try again later.",
+            504,
+          );
+      }
+    }
+    const checked = archived?.page ?? page!;
+    const report = analyse(checked.html, {
+      kind: "url",
+      url,
+      finalUrl: archived ? (page?.finalUrl ?? (/^https?:\/\//i.test(url) ? url : `https://${url}`)) : checked.finalUrl,
+      status: checked.status,
+      bytes: checked.bytes,
+      ms: Date.now() - started,
+      archived: archived
+        ? {
+            date: waybackDate(archived.timestamp),
+            ageDays: Math.max(0, Math.round((Date.now() - Date.parse(waybackDate(archived.timestamp))) / 86_400_000)),
+            snapshotUrl: archived.snapshotUrl,
+            reason,
+          }
+        : undefined,
+    });
+    if (report.rendering?.tagManager) report.rendering.gtm = await inspectGtm(checked.html);
+    const looksBlocked = !archived && BLOCKED.includes(checked.status) && Object.keys(report.items).length === 0;
     if (looksBlocked) {
       report.counts.warnings++;
       report.issues = report.issues.filter((i) => i.code !== "none-found");
       report.issues.unshift({
         severity: "warning",
         code: "blocked",
-        message: `The site didn't return the page to this tool (HTTP ${page.status}). It probably blocks automated requests.`,
-        hint: "Open the page in your browser, view its source (Ctrl+U, or Cmd+Option+U on a Mac), copy it all, and check it with Paste code instead.",
+        message: `The site didn't return the page to this tool (HTTP ${checked.status}), and the Internet Archive has no copy of it.`,
+        hint: "It probably blocks automated requests. Use Paste code with the page source instead.",
       });
       report.counts.warnings = report.issues.filter((i) => i.severity === "warning").length;
-    } else if (page.status >= 400) {
+    } else if (checked.status >= 400) {
       report.counts.warnings++;
       report.issues.unshift({
         severity: "warning",
         code: "http-status",
-        message: `The page returned HTTP ${page.status}.`,
+        message: `The page returned HTTP ${checked.status}.`,
         hint: "Search engines don't index pages that return an error, so their structured data isn't used.",
       });
     }

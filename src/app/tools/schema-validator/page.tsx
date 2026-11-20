@@ -6,7 +6,7 @@ import { SchemaValidator } from "@/components/schema/SchemaValidator";
 import { VOCAB_VERSION } from "@/lib/schema/vocab";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-20T20:30:00+05:30";
+const UPDATED = "2026-11-20T22:15:00+05:30";
 const URL = `${site.url}/tools/schema-validator`;
 
 export const metadata: Metadata = {
@@ -174,6 +174,19 @@ ERRORS
   </Panel>
 );
 
+const ArchiveExample = () => (
+  <Panel label="When a site blocks the check">
+    <p className="font-medium">Checked the Internet Archive&apos;s copy from 7 August 2026</p>
+    <p className="mt-1 text-ink-soft">The site didn&apos;t respond, so the latest archived copy of the page was validated instead.</p>
+    <p className="mt-3 border-t border-rule pt-3 font-medium">To check the live page instead</p>
+    <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-ink-soft">
+      <li>Open the page and press <kbd className="rounded border border-rule px-1 font-mono text-[0.8em] text-ink">Ctrl</kbd> + <kbd className="rounded border border-rule px-1 font-mono text-[0.8em] text-ink">U</kbd></li>
+      <li>Copy the whole source</li>
+      <li>Paste it into Paste code</li>
+    </ol>
+  </Panel>
+);
+
 // ---------- Content ----------
 
 const features = [
@@ -240,6 +253,15 @@ const features = [
     Example: FormatsExample,
   },
   {
+    id: "blocked-sites",
+    title: "Validate pages on sites that block automated checks",
+    body: [
+      "Many large sites, especially banks, insurers and marketplaces, block or stall requests from tools, so a validator often gets an error instead of the page. When that happens here, the validator checks the latest copy of the page saved by the Internet Archive and validates that instead, so you still get the full report.",
+      "The result says clearly which copy was checked, its date and how old it is, with a link to the archived page. If you need the live version, the notice walks you through it: press Ctrl+U, copy the source and paste it into Paste code. One click takes you there.",
+    ],
+    Example: ArchiveExample,
+  },
+  {
     id: "report",
     title: "Hand developers a report they can act on",
     body: [
@@ -259,6 +281,7 @@ const comparison: { label: string; us: string; org: string; rrt: string }[] = [
   { label: "Opens GTM containers to find schema tags", us: "Yes", org: "No", rrt: "No" },
   { label: "Detects garbled text from encoding errors", us: "Yes", org: "No", rrt: "No" },
   { label: "Entity graph with broken @id references", us: "Yes", org: "No", rrt: "No" },
+  { label: "Falls back to the latest archived copy when a site blocks the check", us: "Yes", org: "No", rrt: "No" },
 ];
 
 const commonErrors = [
@@ -304,6 +327,10 @@ const faqs = [
   {
     q: "Why does it say my FAQ markup won't show in Google?",
     a: "Google stopped showing FAQ rich results on 7 May 2026, after limiting them to government and health sites in 2023. FAQPage is still valid schema.org and can help search engines and AI systems understand the page, so there's no need to remove it, but it won't produce a rich result.",
+  },
+  {
+    q: "What happens if a website blocks the validator?",
+    a: "Some sites block or stall automated requests. When that happens, the validator checks the latest copy of the page saved by the Internet Archive and tells you its date and age. To check the live page, open it, press Ctrl+U (Cmd+Option+U on a Mac), copy the source and paste it into Paste code.",
   },
   {
     q: "Does valid markup guarantee rich results?",

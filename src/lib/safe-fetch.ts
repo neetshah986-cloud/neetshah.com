@@ -67,7 +67,12 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
       });
     } catch (e) {
       const timeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-      throw new FetchError(timeout ? "The page took longer than 15 seconds to respond." : `Couldn't connect to ${url.hostname}.`, 504);
+      throw new FetchError(
+        timeout
+          ? "The site didn't respond within 15 seconds. Many sites hold automated requests open like this to block them. Open the page in your browser, view its source (Ctrl+U, or Cmd+Option+U on a Mac), copy it all, and check it with Paste code instead."
+          : `Couldn't connect to ${url.hostname}.`,
+        504,
+      );
     }
 
     if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {

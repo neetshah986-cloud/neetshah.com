@@ -46,17 +46,20 @@ export default async function ToolPage({ params }: PageProps<"/tools/[slug]">) {
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           itemListElement: [
-            { "@type": "ListItem", position: 1, name: "Tools", item: `${site.url}/tools` },
-            { "@type": "ListItem", position: 2, name: tool.name, item: `${site.url}/tools/${tool.slug}` },
+            { "@type": "ListItem", position: 1, name: "Home", item: site.url },
+            { "@type": "ListItem", position: 2, name: "Tools", item: `${site.url}/tools` },
+            { "@type": "ListItem", position: 3, name: tool.name, item: `${site.url}/tools/${tool.slug}` },
           ],
         }}
       />
 
       <section className="container-x pt-12 sm:pt-16">
         <nav aria-label="Breadcrumb" className="text-sm text-ink-soft">
-          <ol className="flex items-center gap-2">
+          <ol className="flex flex-wrap items-center gap-2">
+            <li><Link href="/" className="hover:text-ink">Home</Link></li>
+            <li aria-hidden="true">›</li>
             <li><Link href="/tools" className="hover:text-ink">Tools</Link></li>
-            <li aria-hidden="true">/</li>
+            <li aria-hidden="true">›</li>
             <li aria-current="page" className="text-ink">{tool.name}</li>
           </ol>
         </nav>

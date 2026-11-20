@@ -315,6 +315,12 @@ const faqs = [
   },
 ];
 
+const breadcrumb = [
+  { name: "Home", path: "/" },
+  { name: "Tools", path: "/tools" },
+  { name: "Schema Validator", path: "/tools/schema-validator" },
+];
+
 const cell = (v: string) =>
   v === "Yes" ? (
     <span className="inline-flex items-center gap-1.5 font-medium text-pass"><Tick /> Yes</span>
@@ -331,6 +337,30 @@ export default function SchemaValidatorPage() {
         data={{
           "@context": "https://schema.org",
           "@graph": [
+            { "@type": "WebSite", "@id": `${site.url}/#website`, name: site.name, alternateName: site.hub, url: site.url, publisher: { "@id": person.id } },
+            personJsonLd,
+            {
+              "@type": "WebPage",
+              "@id": URL,
+              url: URL,
+              name: "Schema Validator: Free Schema Markup & Rich Results Checker",
+              description: metadata.description,
+              inLanguage: "en",
+              datePublished: "2026-11-20T00:00:00+05:30",
+              dateModified: UPDATED,
+              isPartOf: { "@id": `${site.url}/#website` },
+              about: { "@id": `${URL}#app` },
+              mainEntity: { "@id": `${URL}#app` },
+              author: { "@id": person.id },
+              publisher: { "@id": person.id },
+              breadcrumb: { "@id": `${URL}#breadcrumb` },
+              hasPart: [{ "@id": `${URL}#faq` }, { "@id": `${URL}#howto` }],
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${URL}#breadcrumb`,
+              itemListElement: breadcrumb.map((b, i) => ({ "@type": "ListItem", position: i + 1, name: b.name, item: `${site.url}${b.path === "/" ? "" : b.path}` })),
+            },
             {
               "@type": "WebApplication",
               "@id": `${URL}#app`,
@@ -339,32 +369,32 @@ export default function SchemaValidatorPage() {
               url: URL,
               description: metadata.description,
               applicationCategory: "DeveloperApplication",
+              applicationSubCategory: "SEO tool",
               operatingSystem: "Any",
               browserRequirements: "Requires JavaScript",
+              inLanguage: "en",
               isAccessibleForFree: true,
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
               featureList: features.map((f) => f.title),
-              creator: { "@id": person.id },
-            },
-            { "@type": "WebSite", "@id": `${site.url}/#website`, name: site.name, url: site.url },
-            personJsonLd,
-            {
-              "@type": "WebPage",
-              "@id": URL,
-              url: URL,
-              name: "Schema Validator",
+              softwareVersion: `schema.org ${VOCAB_VERSION}`,
               dateModified: UPDATED,
-              mainEntity: { "@id": `${URL}#app` },
-              author: { "@id": person.id },
-              isPartOf: { "@id": `${site.url}/#website` },
-              inLanguage: "en",
-              breadcrumb: {
-                "@type": "BreadcrumbList",
-                itemListElement: [
-                  { "@type": "ListItem", position: 1, name: "Tools", item: `${site.url}/tools` },
-                  { "@type": "ListItem", position: 2, name: "Schema Validator", item: URL },
-                ],
-              },
+              creator: { "@id": person.id },
+              publisher: { "@id": person.id },
+            },
+            {
+              "@type": "HowTo",
+              "@id": `${URL}#howto`,
+              name: "How to validate schema markup",
+              description: "Check a page's structured data against schema.org and Google's rules, and find what needs fixing.",
+              tool: { "@type": "HowToTool", name: "Schema Validator" },
+              totalTime: "PT2M",
+              step: steps.map((st, i) => ({ "@type": "HowToStep", position: i + 1, name: st.t, text: st.d, url: `${URL}#howto-step-${i + 1}` })),
+            },
+            {
+              "@type": "FAQPage",
+              "@id": `${URL}#faq`,
+              name: "FAQs on Schema Validator",
+              mainEntity: faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
             },
           ],
         }}
@@ -372,10 +402,17 @@ export default function SchemaValidatorPage() {
 
       <section className="container-x pt-12 sm:pt-16">
         <nav aria-label="Breadcrumb" className="text-sm text-ink-soft">
-          <ol className="flex items-center gap-2">
-            <li><Link href="/tools" className="hover:text-ink">Tools</Link></li>
-            <li aria-hidden="true">/</li>
-            <li aria-current="page" className="text-ink">Schema Validator</li>
+          <ol className="flex flex-wrap items-center gap-2">
+            {breadcrumb.map((b, i) => (
+              <li key={b.name} className="flex items-center gap-2">
+                {i > 0 && <span aria-hidden="true">›</span>}
+                {i < breadcrumb.length - 1 ? (
+                  <Link href={b.path} className="hover:text-ink">{b.name}</Link>
+                ) : (
+                  <span aria-current="page" className="text-ink">{b.name}</span>
+                )}
+              </li>
+            ))}
           </ol>
         </nav>
         <h1 className="display mt-8 text-5xl sm:text-6xl">Schema Validator</h1>
@@ -461,11 +498,11 @@ export default function SchemaValidatorPage() {
         </dl>
       </section>
 
-      <section aria-labelledby="howto-heading" className="container-x mt-32">
+      <section id="howto" aria-labelledby="howto-heading" className="container-x mt-32">
         <h2 id="howto-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">How to validate schema markup</h2>
         <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
           {steps.map((s, i) => (
-            <li key={s.t} className="border-t-2 border-ink pt-4">
+            <li key={s.t} id={`howto-step-${i + 1}`} className="border-t-2 border-ink pt-4">
               <span className="font-mono text-sm text-ink-soft">Step {i + 1}</span>
               <h3 className="mt-1 text-lg font-semibold tracking-tight">{s.t}</h3>
               <p className="mt-2 text-[0.95rem] leading-relaxed text-ink-soft">{s.d}</p>
@@ -474,8 +511,8 @@ export default function SchemaValidatorPage() {
         </ol>
       </section>
 
-      <section aria-labelledby="faq-heading" className="container-x mt-32">
-        <h2 id="faq-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">Questions</h2>
+      <section id="faq" aria-labelledby="faq-heading" className="container-x mt-32">
+        <h2 id="faq-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">FAQs on Schema Validator</h2>
         <div className="mt-8 max-w-3xl divide-y divide-rule border-y border-rule">
           {faqs.map((f) => (
             <details key={f.q} className="group py-5">

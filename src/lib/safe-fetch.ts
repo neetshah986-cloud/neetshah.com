@@ -27,7 +27,7 @@ function isPrivateIp(ip: string): boolean {
   return v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80") || v.startsWith("ff");
 }
 
-async function assertPublic(url: URL) {
+export async function assertPublicUrl(url: URL) {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new FetchError("Only http:// and https:// URLs can be checked.");
   if (url.username || url.password) throw new FetchError("URLs with a username or password can't be checked.");
   const host = url.hostname.replace(/^\[|\]$/g, "");
@@ -58,7 +58,7 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
   const started = Date.now();
   const redirects: string[] = [];
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    await assertPublic(url);
+    await assertPublicUrl(url);
     let res: Response;
     try {
       res = await fetch(url, {

@@ -15,12 +15,12 @@ export const tools: Tool[] = [
   {
     slug: "page-speed-test",
     name: "Page Speed Test",
-    tagline: "Core Web Vitals and Lighthouse results for any URL, mobile and desktop.",
+    tagline: "Core Web Vitals for mobile and desktop, with the root cause of each slow metric and the fixed code.",
     description:
-      "Run a mobile and desktop performance test, see field and lab Core Web Vitals, and get fixes ordered by how much time they save.",
+      "Test with Google's Lighthouse and real Chrome data, see what's behind slow LCP, INP and CLS, and get the element and fixed code for your developer.",
     category: "Performance",
-    signals: ["LCP", "INP", "CLS", "TTFB", "Render-blocking resources", "Image weight"],
-    status: "in-development",
+    signals: ["LCP", "INP", "CLS", "TTFB", "Root cause per metric", "Fixed code per element"],
+    status: "live",
   },
   {
     slug: "schema-validator",

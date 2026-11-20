@@ -377,7 +377,8 @@ export function extract(rawInput: string, opts: { isFullPage: boolean }): Extrac
     pageText,
     scriptText,
     hints: {
-      usesTagManager: /googletagmanager\.com\/gtm\.js|GTM-[A-Z0-9]{4,}/.test(input),
+      // Only count Tag Manager when it's loaded by a script, not when "GTM-..." appears in page text.
+      usesTagManager: /googletagmanager\.com\/gtm\.js/.test(input),
       isJsApp: /<div id="(root|app|__next|__nuxt)"[^>]*>\s*<\/div>/.test(input),
       // Inline JavaScript that writes JSON-LD into the page at runtime.
       jsCreatesSchema,

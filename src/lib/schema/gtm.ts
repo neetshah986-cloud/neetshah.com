@@ -4,8 +4,16 @@ import { fetchPage } from "@/lib/safe-fetch";
 
 export type GtmContainer = { id: string; checked: boolean; schemaTags: number; types: string[] };
 
+// Container IDs from the gtm.js URLs and inline scripts only, never from visible text.
 export function gtmIds(html: string): string[] {
-  return [...new Set([...html.matchAll(/GTM-[A-Z0-9]{4,10}\b/g)].map((m) => m[0]))].slice(0, 5);
+  const sources = [
+    ...[...html.matchAll(/googletagmanager\.com\/(?:gtm\.js|ns\.html)\?id=(GTM-[A-Z0-9]{4,10})/g)].map((m) => m[1]),
+    // The standard snippet builds the URL in code: ...gtm.js?id='+i ... 'dataLayer','GTM-XXXX'
+    ...[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+      .filter((m) => m[1].includes("googletagmanager.com/gtm.js"))
+      .flatMap((m) => [...m[1].matchAll(/GTM-[A-Z0-9]{4,10}\b/g)].map((x) => x[0])),
+  ];
+  return [...new Set(sources)].slice(0, 5);
 }
 
 const unescapeJs = (s: string) =>

@@ -1,53 +1,328 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
+import { Byline, LinkedInLink } from "@/components/Person";
 import { SchemaValidator } from "@/components/schema/SchemaValidator";
 import { VOCAB_VERSION } from "@/lib/schema/vocab";
-import { person, site } from "@/lib/site";
+import { person, personJsonLd, site } from "@/lib/site";
+
+const UPDATED = "2026-11-20T20:30:00+05:30";
+const URL = `${site.url}/tools/schema-validator`;
 
 export const metadata: Metadata = {
-  title: "Schema Validator: Test Structured Data and Rich Results",
+  title: { absolute: "Schema Validator: Free Schema Markup & Rich Results Checker" },
   description:
-    "Free schema markup validator. Checks JSON-LD, Microdata and RDFa against schema.org and Google's rich result rules, and flags values that aren't on the page.",
+    "Free schema validator for JSON-LD, Microdata and RDFa. Checks schema.org and Google rules, visible content, and whether markup sits in HTML, JavaScript or GTM.",
   alternates: { canonical: "/tools/schema-validator" },
+  openGraph: {
+    title: "Schema Validator: the checks other validators miss",
+    description: "Validate structured data against schema.org and Google, and see whether it's in the server HTML, JavaScript or Tag Manager.",
+    url: URL,
+  },
 };
 
-const sameAsSchemaOrg = [
-  "JSON-LD, Microdata and RDFa, from a URL or pasted code",
-  `Every type and property in schema.org ${VOCAB_VERSION}`,
-  "Properties used on the wrong type, with where they belong",
-  "Values of the wrong type, and invalid enumeration values",
-  "Superseded and pending terms",
-  "JSON syntax errors, with the line and the likely cause",
+// ---------- Small visual examples ----------
+
+function Tick({ tone = "pass" }: { tone?: "pass" | "warn" | "fail" | "note" }) {
+  const color = tone === "pass" ? "text-pass" : tone === "warn" ? "text-warn" : tone === "fail" ? "text-fail" : "text-serp";
+  return (
+    <svg viewBox="0 0 20 20" className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} aria-hidden="true">
+      <circle cx="10" cy="10" r="9" fill="currentColor" opacity="0.14" />
+      {tone === "pass" ? (
+        <path d="M6 10.4l2.6 2.6L14 7.6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M10 5.8v5.2M10 14h.01" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+function Panel({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <figure className="rounded-xl border border-rule bg-white p-5 text-[0.93rem] shadow-[0_1px_0_#D9E0EA,0_20px_40px_-30px_rgba(14,26,43,0.35)]">
+      {children}
+      <figcaption className="mt-4 border-t border-dashed border-rule pt-3 text-xs text-ink-soft">{label}</figcaption>
+    </figure>
+  );
+}
+
+const RenderingExample = () => (
+  <Panel label="Rendering check, shown at the top of every result">
+    <ul className="space-y-3">
+      <li className="flex gap-2.5"><Tick /> <span><b className="font-medium">Structured data is in the server HTML</b><br /><span className="text-ink-soft">Readable without running JavaScript.</span></span></li>
+      <li className="flex gap-2.5"><Tick /> <span><b className="font-medium">No structured data in Google Tag Manager</b><br /><span className="text-ink-soft">Containers GTM-XXXXXX opened and checked.</span></span></li>
+      <li className="flex gap-2.5"><Tick tone="warn" /> <span><b className="font-medium">11 values only appear after JavaScript runs</b><br /><span className="text-ink-soft">The FAQ section is client-side rendered.</span></span></li>
+    </ul>
+  </Panel>
+);
+
+const ContentExample = () => (
+  <Panel label="Content match: three states, not just found or missing">
+    <ul className="divide-y divide-rule">
+      {[
+        { tone: "pass" as const, p: "Product.name", v: "Trail Runner Pro", s: "On the page", c: "text-pass" },
+        { tone: "note" as const, p: "FAQPage.mainEntity.name", v: "How long does a claim take?", s: "Only after JavaScript", c: "text-serp" },
+        { tone: "warn" as const, p: "aggregateRating.reviewCount", v: "355", s: "Not in the page HTML", c: "text-warn" },
+      ].map((r) => (
+        <li key={r.p} className="grid grid-cols-[auto_1fr] gap-x-2.5 py-2.5">
+          <Tick tone={r.tone} />
+          <span className="min-w-0">
+            <span className="block break-all font-mono text-[0.8rem] text-ink-soft">{r.p}</span>
+            <span className="block">{r.v}</span>
+            <span className={`block text-sm ${r.c}`}>{r.s}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  </Panel>
+);
+
+const GarbledExample = () => (
+  <Panel label="Garbled text check, with the repaired text">
+    <p className="text-sm text-ink-soft">In the markup</p>
+    <p className="mt-1 rounded-md bg-fail/10 px-3 py-2 font-mono text-[0.85rem] text-fail">Claims are the â€˜moment of truthâ€™</p>
+    <p className="mt-3 text-sm text-ink-soft">What it should say</p>
+    <p className="mt-1 rounded-md bg-pass/10 px-3 py-2 font-mono text-[0.85rem] text-pass">Claims are the ‘moment of truth’</p>
+  </Panel>
+);
+
+const SourceExample = () => (
+  <Panel label="Select a property and the source jumps to its line">
+    <div className="overflow-hidden rounded-lg border border-rule font-mono text-[12.5px] leading-[22px]">
+      {[
+        [14, '"offers": {', false],
+        [15, '  "@type": "Offer",', false],
+        [16, '  "price": "₹1,299",', "dot"],
+        [17, '  "priceCurrency": "₹",', "focus"],
+        [18, '  "availability": "In stock"', "dot"],
+      ].map(([n, code, state]) => (
+        <div key={n as number} className={`flex ${state === "focus" ? "bg-serp/15" : "bg-serp/[0.04]"}`}>
+          <span className={`flex w-12 shrink-0 items-center justify-end gap-1.5 border-r pr-2 ${state === "focus" ? "border-serp text-ink" : "border-rule text-ink-soft/70"}`}>
+            {state && <span className="h-1.5 w-1.5 rounded-full bg-fail" />}
+            {n}
+          </span>
+          <span className="truncate whitespace-pre pl-3">{code}</span>
+        </div>
+      ))}
+    </div>
+  </Panel>
+);
+
+const GoogleExample = () => (
+  <Panel label="Google features, judged by 2026 rules">
+    <ul className="space-y-2.5">
+      {[
+        ["Product snippet", "Eligible", "bg-pass/10 text-pass"],
+        ["Merchant listing", "Missing required fields", "bg-fail/10 text-fail"],
+        ["Article", "Eligible, can be improved", "bg-warn/10 text-warn"],
+        ["FAQ", "No longer shown by Google", "bg-mist text-ink-soft"],
+      ].map(([f, s, c]) => (
+        <li key={f} className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium">{f}</span>
+          <span className={`rounded-md px-2 py-0.5 text-sm font-medium ${c}`}>{s}</span>
+        </li>
+      ))}
+    </ul>
+  </Panel>
+);
+
+const GraphExample = () => (
+  <Panel label="Entity graph: how @id references connect">
+    <p className="font-semibold">Article</p>
+    <ul className="mt-2 space-y-1.5">
+      <li className="flex flex-wrap gap-x-2"><span className="font-mono text-[0.8rem] text-ink-soft">publisher</span><span aria-hidden="true" className="text-ink-soft">→</span>Organization</li>
+      <li className="flex flex-wrap gap-x-2"><span className="font-mono text-[0.8rem] text-ink-soft">author</span><span aria-hidden="true" className="text-ink-soft">→</span>Person</li>
+      <li className="flex flex-wrap gap-x-2"><span className="font-mono text-[0.8rem] text-ink-soft">image</span><span aria-hidden="true" className="text-ink-soft">→</span><span className="text-warn">Not defined on this page</span></li>
+    </ul>
+  </Panel>
+);
+
+const FormatsExample = () => (
+  <Panel label="Value formats Google can't read, with the fix">
+    <dl className="divide-y divide-rule">
+      {[
+        ["price", "₹1,299", "1299"],
+        ["priceCurrency", "₹", "INR"],
+        ["datePublished", "20/11/2026", "2026-11-20"],
+        ["availability", "In stock", "https://schema.org/InStock"],
+        ["duration", "1 hour", "PT1H"],
+      ].map(([p, bad, good]) => (
+        <div key={p} className="grid grid-cols-[7.5rem_1fr] gap-x-3 py-2">
+          <dt className="font-mono text-[0.8rem] text-ink-soft">{p}</dt>
+          <dd className="min-w-0 font-mono text-[0.8rem]">
+            <span className="text-fail line-through decoration-fail/40">{bad}</span>
+            <span aria-hidden="true" className="px-1.5 text-ink-soft">→</span>
+            <span className="break-all text-pass">{good}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  </Panel>
+);
+
+const ReportExample = () => (
+  <Panel label="Copy report for a developer">
+    <pre className="overflow-hidden whitespace-pre-wrap font-mono text-[0.78rem] leading-relaxed text-ink-soft">{`Structured data report: example.com/product
+3 errors, 2 warnings, 1 note
+
+RENDERING (SSR vs CSR)
+- 5 values only appear after JavaScript runs…
+
+ERRORS
+- [Offer.priceCurrency] "₹" isn't a 3-letter
+  ISO 4217 code. Use "INR".`}</pre>
+  </Panel>
+);
+
+// ---------- Content ----------
+
+const features = [
+  {
+    id: "rendering",
+    title: "See where your schema actually lives: server HTML, JavaScript or Tag Manager",
+    body: [
+      "Most validators tell you whether markup is valid. This one also tells you whether search engines can rely on it. Every result opens with a rendering check that shows whether your structured data is in the HTML your server sends, written into the page by JavaScript, or deployed through Google Tag Manager.",
+      "It goes further for Tag Manager: GTM containers are public, so the validator opens each one on the page and looks for Custom HTML tags that add JSON-LD, then names the schema types they add. You get a definite answer instead of a guess. The best practice is simple: structured data, and the content it describes, belong in server-rendered HTML.",
+    ],
+    Example: RenderingExample,
+  },
+  {
+    id: "content-match",
+    title: "Catch schema markup that doesn't match what visitors see",
+    body: [
+      "Google's structured data guidelines require markup to describe content that is visible on the page. A review count, a price or an FAQ that exists only in JSON-LD can make a page ineligible for rich results, or be treated as spammy markup.",
+      "The validator compares names, headlines, prices, ratings, review counts, addresses and FAQ answers with the page text, and tells three cases apart: on the page, rendered only by JavaScript (client-side rendering), or not in the page HTML at all. That's the difference between a technical fix and a content fix.",
+    ],
+    Example: ContentExample,
+  },
+  {
+    id: "encoding",
+    title: "Spot garbled characters before Google shows them",
+    body: [
+      "When UTF-8 text is saved or served with the wrong character set, apostrophes and accented letters turn into sequences like â€™ and Ã©. Search results and AI answers then quote the garbled text.",
+      "This check flags those values, shows you exactly where they are, and works out what the text was meant to say, so you can confirm the fix in seconds. It catches errors that both validator.schema.org and Google's Rich Results Test pass without comment.",
+    ],
+    Example: GarbledExample,
+  },
+  {
+    id: "source",
+    title: "Jump from any error to its exact line in the source",
+    body: [
+      "The page source sits next to the results, with every line that has an error or warning marked in the margin. Open an item to shade its whole block; select a property to jump straight to its line, even on pages with tens of thousands of lines.",
+      "Items are listed by name, so five HowTo items read as five different guides rather than five identical rows, and nested objects such as Offer, AggregateRating or PostalAddress keep their own issues inline.",
+    ],
+    Example: SourceExample,
+  },
+  {
+    id: "rich-results",
+    title: "Know which Google rich results you can actually get",
+    body: [
+      `Alongside every type and property in schema.org ${VOCAB_VERSION}, the validator checks the required and recommended fields for 19 Google Search features, including product snippets, merchant listings, reviews, articles, breadcrumbs, local business, events, recipes, video, job postings and profile pages.`,
+      "It also keeps up with Google's retirements. FAQ rich results stopped appearing in May 2026, and how-to, course info, fact check, vehicle listing and practice problem results have all been phased out. The validator marks these clearly, so you don't spend time on markup that can't earn a rich result.",
+    ],
+    Example: GoogleExample,
+  },
+  {
+    id: "graph",
+    title: "Find broken links between entities",
+    body: [
+      "Well-built structured data is a graph: an Article points to its publisher, a WebPage to the organization behind it, a Product to its brand. The entity graph shows every @id reference on the page and flags the ones that point to something that isn't there.",
+      "It also catches the same @id used for different types, the same entity marked up in two formats, and competing Organization or Article items that send search engines mixed signals.",
+    ],
+    Example: GraphExample,
+  },
+  {
+    id: "formats",
+    title: "Fix the value formats Google can't read",
+    body: [
+      "Plenty of markup passes a schema.org check and still fails in Google, because the values are in the wrong format. Prices with currency symbols or thousands separators, a ₹ sign instead of an ISO 4217 code, dates that aren't ISO 8601, durations written in words, ratings above bestRating and end dates before start dates are all flagged, each with the corrected value.",
+    ],
+    Example: FormatsExample,
+  },
+  {
+    id: "report",
+    title: "Hand developers a report they can act on",
+    body: [
+      "Copy every finding as plain text, grouped into rendering, errors, warnings, missing Google fields and content that isn't on the page, and paste it straight into a ticket. Download the full result as JSON, share a link that reruns the check for any URL, or read the JSON-LD formatted for humans.",
+    ],
+    Example: ReportExample,
+  },
 ];
 
-const beyond = [
-  { title: "Google rich result eligibility", body: "Required and recommended fields for 19 Google features, with features Google has retired (FAQ, HowTo, Course info and others) marked clearly." },
-  { title: "Visible content match", body: "Compares names, prices, ratings and answers in your markup with the page text, because Google requires structured data to describe what visitors can see." },
-  { title: "Value formats", body: "Prices with currency symbols, currency symbols instead of ISO codes, non-ISO dates and durations, ratings above bestRating, end dates before start dates." },
-  { title: "Entity graph", body: "How entities link through @id, and references that point to an @id that isn't on the page." },
-  { title: "Duplicates and conflicts", body: "The same entity marked up in two formats, one @id used for different types, and competing Organization or Article items." },
-  { title: "A report you can hand over", body: "Copy every issue as plain text for a developer, or download the full report as JSON." },
+const comparison: { label: string; us: string; org: string; rrt: string }[] = [
+  { label: "Checks the full schema.org vocabulary", us: "Yes", org: "Yes", rrt: "Only Google features" },
+  { label: "Google rich result eligibility", us: "Yes", org: "No", rrt: "Yes" },
+  { label: "Marks rich results Google has retired", us: "Yes", org: "No", rrt: "No" },
+  { label: "Value formats: prices, currencies, dates, durations", us: "Yes", org: "No", rrt: "Some" },
+  { label: "Compares markup with the visible page text", us: "Yes", org: "No", rrt: "No" },
+  { label: "Shows whether markup is in server HTML, JavaScript or GTM", us: "Yes", org: "No", rrt: "No" },
+  { label: "Opens GTM containers to find schema tags", us: "Yes", org: "No", rrt: "No" },
+  { label: "Detects garbled text from encoding errors", us: "Yes", org: "No", rrt: "No" },
+  { label: "Entity graph with broken @id references", us: "Yes", org: "No", rrt: "No" },
+];
+
+const commonErrors = [
+  { e: "“price” isn't a property of Product", fix: "Price belongs on the Offer inside offers, not on the Product itself." },
+  { e: "“AcceptedAnswer” isn't a schema.org property", fix: "Property names are case-sensitive. It's acceptedAnswer, and with the wrong case no answer is read at all." },
+  { e: "“Prodcut” isn't a schema.org type", fix: "Typos in type names are matched to the closest real type, with a “did you mean” suggestion." },
+  { e: "JSON-LD block isn't valid JSON", fix: "Usually a trailing comma, curly quotes or a comment. The whole block is ignored until it's fixed, and the tool shows the line and the likely cause." },
+  { e: "No @context", fix: "Without \"@context\": \"https://schema.org\", types and properties aren't recognised as schema.org." },
+  { e: "“In stock” isn't a valid availability value", fix: "Enumerations need the schema.org value, for example https://schema.org/InStock." },
+  { e: "@id points to something that isn't on the page", fix: "Search engines don't follow @id references across pages. Define the entity on the page, or fix the typo." },
+  { e: "Values in the markup aren't on the page", fix: "A review count, address or FAQ that visitors can't see goes against Google's guidelines." },
+];
+
+const steps = [
+  { t: "Enter a URL or paste code", d: "Validate a live page by URL, or paste JSON-LD, a script tag or a full HTML page. Pasting the rendered HTML from your browser's DevTools lets you check JavaScript-rendered content too." },
+  { t: "Read the rendering check", d: "See straight away whether your structured data and the content it describes are in the server HTML, rendered by JavaScript or added through Tag Manager." },
+  { t: "Work through the items", d: "Choose a type, then an item. Each property shows its issues inline, and selecting it highlights the exact line in the source." },
+  { t: "Check Google features and content match", d: "Confirm which rich results the page is eligible for, what's missing, and whether every value in the markup is visible to users." },
+  { t: "Send the fixes", d: "Copy the developer report into a ticket, or share a link that reruns the check after the fix is live." },
 ];
 
 const faqs = [
   {
+    q: "What is a schema validator?",
+    a: "A schema validator checks structured data, the JSON-LD, Microdata or RDFa that describes a page to search engines, against the schema.org vocabulary. It finds types and properties that don't exist, values of the wrong kind and syntax errors that stop search engines reading the markup. This one also checks Google's rich result rules and the page itself.",
+  },
+  {
     q: "How is this different from Google's Rich Results Test?",
-    a: "The Rich Results Test only checks the features Google supports, and it hides schema.org errors that don't affect them. This tool checks the full schema.org vocabulary, the way validator.schema.org does, and Google's requirements on top, so you see both in one place. It also checks your markup against the visible page text, which neither tool does.",
+    a: "The Rich Results Test only checks the features Google supports and hides schema.org errors that don't affect them. This tool checks the full schema.org vocabulary, as validator.schema.org does, adds Google's requirements on top, and then checks things neither tool covers: whether the markup matches the visible page, whether it's in the server HTML, JavaScript or Tag Manager, and whether the text is garbled by an encoding error.",
+  },
+  {
+    q: "How is it different from validator.schema.org?",
+    a: "validator.schema.org checks markup against the vocabulary, which this tool does too, using schema.org " + VOCAB_VERSION + ". On top of that you get Google rich result eligibility with 2026 retirements, value format checks, visible content matching, the rendering and Tag Manager check, garbled text detection, an entity graph and a developer report.",
   },
   {
     q: "Does it run JavaScript on the page?",
-    a: "No. It reads the raw HTML your server sends, which is what search engines see first. If your structured data is added by JavaScript, for example through Google Tag Manager, it won't appear here. Google can still pick it up after rendering, but server-rendered markup is the more reliable choice, and the tool tells you when a page looks like it relies on JavaScript.",
+    a: "No, and that's deliberate. It reads the raw HTML your server sends, which is what crawlers receive first and what many AI crawlers rely on entirely. Instead of hiding the difference, it tells you which parts of your markup and content depend on JavaScript. To check a JavaScript-rendered page, paste its rendered HTML from your browser's DevTools.",
+  },
+  {
+    q: "Can it check structured data added through Google Tag Manager?",
+    a: "Yes. When a page loads Tag Manager, the validator opens each GTM container and looks for Custom HTML tags that write JSON-LD, then lists the schema types they add. It doesn't validate those tags' contents, because they only exist after GTM runs in the browser, which is also why moving them into the page template is the better setup.",
   },
   {
     q: "Why does it say my FAQ markup won't show in Google?",
-    a: "Google stopped showing FAQ rich results on 7 May 2026, after limiting them to government and health sites in 2023. FAQPage is still valid schema.org and can help search engines understand the page, so there's no need to remove it, but it won't produce a rich result.",
+    a: "Google stopped showing FAQ rich results on 7 May 2026, after limiting them to government and health sites in 2023. FAQPage is still valid schema.org and can help search engines and AI systems understand the page, so there's no need to remove it, but it won't produce a rich result.",
   },
   {
-    q: "Does a valid result guarantee rich results?",
-    a: "No. Valid, eligible markup is the requirement, not a guarantee. Google decides whether to show a rich result based on the query, the page's quality and its own guidelines.",
+    q: "Does valid markup guarantee rich results?",
+    a: "No. Valid, eligible markup is the requirement, not a guarantee. Google decides whether to show a rich result based on the query, the page's quality and its own policies.",
+  },
+  {
+    q: "Is it free, and are my results stored?",
+    a: "It's free and needs no account. The page you enter is fetched once to run the check, and the results aren't saved.",
   },
 ];
+
+const cell = (v: string) =>
+  v === "Yes" ? (
+    <span className="inline-flex items-center gap-1.5 font-medium text-pass"><Tick /> Yes</span>
+  ) : v === "No" ? (
+    <span className="text-ink-soft">No</span>
+  ) : (
+    <span className="text-ink-soft">{v}</span>
+  );
 
 export default function SchemaValidatorPage() {
   return (
@@ -58,21 +333,38 @@ export default function SchemaValidatorPage() {
           "@graph": [
             {
               "@type": "WebApplication",
+              "@id": `${URL}#app`,
               name: "Schema Validator",
-              url: `${site.url}/tools/schema-validator`,
+              alternateName: "Schema Markup Validator",
+              url: URL,
               description: metadata.description,
               applicationCategory: "DeveloperApplication",
               operatingSystem: "Any",
+              browserRequirements: "Requires JavaScript",
               isAccessibleForFree: true,
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              featureList: features.map((f) => f.title),
               creator: { "@id": person.id },
             },
+            { "@type": "WebSite", "@id": `${site.url}/#website`, name: site.name, url: site.url },
+            personJsonLd,
             {
-              "@type": "BreadcrumbList",
-              itemListElement: [
-                { "@type": "ListItem", position: 1, name: "Tools", item: `${site.url}/tools` },
-                { "@type": "ListItem", position: 2, name: "Schema Validator", item: `${site.url}/tools/schema-validator` },
-              ],
+              "@type": "WebPage",
+              "@id": URL,
+              url: URL,
+              name: "Schema Validator",
+              dateModified: UPDATED,
+              mainEntity: { "@id": `${URL}#app` },
+              author: { "@id": person.id },
+              isPartOf: { "@id": `${site.url}/#website` },
+              inLanguage: "en",
+              breadcrumb: {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "Tools", item: `${site.url}/tools` },
+                  { "@type": "ListItem", position: 2, name: "Schema Validator", item: URL },
+                ],
+              },
             },
           ],
         }}
@@ -87,45 +379,102 @@ export default function SchemaValidatorPage() {
           </ol>
         </nav>
         <h1 className="display mt-8 text-5xl sm:text-6xl">Schema Validator</h1>
-        <p className="mt-5 max-w-3xl text-lg leading-relaxed text-ink-soft">
-          Check structured data against all of schema.org and Google&apos;s rich result rules in one pass, and see whether your markup matches what&apos;s actually on the page.
+        <p className="mt-5 max-w-3xl text-lg leading-relaxed text-ink-soft sm:text-xl">
+          Validate structured data against all of schema.org and Google&apos;s rich result rules, then see what other validators don&apos;t show: whether your markup is in the server HTML, rendered by JavaScript or added through Tag Manager, and whether it matches what visitors actually see.
         </p>
+        <ul className="mt-6 flex flex-wrap gap-2 text-sm">
+          {[`schema.org ${VOCAB_VERSION}: 939 types, 1,538 properties`, "19 Google rich result features", "JSON-LD, Microdata and RDFa", "Free, no sign-up"].map((t) => (
+            <li key={t} className="rounded-md border border-rule bg-white px-2.5 py-1 text-ink-soft">{t}</li>
+          ))}
+        </ul>
         <div className="mt-10">
           <SchemaValidator />
         </div>
       </section>
 
-      <section aria-labelledby="checks-heading" className="container-x mt-28">
-        <h2 id="checks-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">What it checks</h2>
-        <div className="mt-10 grid gap-12 lg:grid-cols-[1fr_2fr] lg:gap-16">
-          <div>
-            <h3 className="font-semibold">Everything the schema.org validator checks</h3>
-            <ul className="mt-4 divide-y divide-rule border-y border-rule">
-              {sameAsSchemaOrg.map((s) => (
-                <li key={s} className="flex gap-3 py-3 leading-snug">
-                  <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0 text-pass" aria-hidden="true">
-                    <path d="M5 10.4l3 3L15 6.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3 className="font-semibold">And what it doesn&apos;t</h3>
-            <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2">
-              {beyond.map((b) => (
-                <div key={b.title} className="bg-paper p-5">
-                  <dt className="font-semibold tracking-tight">{b.title}</dt>
-                  <dd className="mt-1.5 text-[0.95rem] leading-relaxed text-ink-soft">{b.body}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+      <section aria-labelledby="features-heading" className="container-x mt-32">
+        <div className="max-w-3xl">
+          <h2 id="features-heading" className="text-3xl font-semibold tracking-tight sm:text-5xl">The checks other schema validators miss</h2>
+          <p className="mt-5 text-lg leading-relaxed text-ink-soft">
+            A schema.org check tells you whether markup is valid. Search engines also care whether they can reach it, whether it&apos;s true to the page, and whether it earns anything in Google. This tool answers all four in a single pass.
+          </p>
+        </div>
+        <div className="mt-16 space-y-20 sm:space-y-24">
+          {features.map(({ id, title, body, Example }, k) => (
+            <article key={id} id={id} className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
+              <div className={k % 2 ? "lg:order-2" : ""}>
+                <h3 className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">{title}</h3>
+                {body.map((p) => (
+                  <p key={p.slice(0, 20)} className="mt-4 max-w-xl leading-relaxed text-ink-soft">{p}</p>
+                ))}
+              </div>
+              <div className={`max-w-lg ${k % 2 ? "lg:order-1" : "lg:justify-self-end"} w-full`}>
+                <Example />
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section aria-labelledby="faq-heading" className="container-x mt-28">
+      <section aria-labelledby="compare-heading" className="container-x mt-32">
+        <h2 id="compare-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">How it compares</h2>
+        <p className="mt-4 max-w-3xl leading-relaxed text-ink-soft">
+          validator.schema.org and Google&apos;s Rich Results Test are both excellent at what they do. This validator covers what each of them checks, and adds the questions they leave open.
+        </p>
+        <div className="mt-8 overflow-x-auto rounded-xl border border-rule bg-white">
+          <table className="w-full min-w-[40rem] text-left text-[0.95rem]">
+            <thead className="border-b border-rule bg-mist/60 text-sm">
+              <tr>
+                <th scope="col" className="px-5 py-3.5 font-semibold">Check</th>
+                <th scope="col" className="px-5 py-3.5 font-semibold">This validator</th>
+                <th scope="col" className="px-5 py-3.5 font-semibold">validator.schema.org</th>
+                <th scope="col" className="px-5 py-3.5 font-semibold">Rich Results Test</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-rule">
+              {comparison.map((r) => (
+                <tr key={r.label}>
+                  <th scope="row" className="px-5 py-3.5 font-normal">{r.label}</th>
+                  <td className="px-5 py-3.5">{cell(r.us)}</td>
+                  <td className="px-5 py-3.5">{cell(r.org)}</td>
+                  <td className="px-5 py-3.5">{cell(r.rrt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-sm text-ink-soft">Compared in November 2026. Google&apos;s Rich Results Test renders JavaScript; this tool reads the server HTML by design and reports what depends on JavaScript.</p>
+      </section>
+
+      <section aria-labelledby="errors-heading" className="container-x mt-32 grid gap-10 lg:grid-cols-[1fr_1.7fr] lg:gap-16">
+        <div>
+          <h2 id="errors-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">Common schema errors it finds</h2>
+          <p className="mt-4 max-w-sm leading-relaxed text-ink-soft">The mistakes that come up again and again in real audits, from global e-commerce sites to Indian insurers, and what each one means.</p>
+        </div>
+        <dl className="divide-y divide-rule border-y border-rule">
+          {commonErrors.map((c) => (
+            <div key={c.e} className="grid gap-1 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-6">
+              <dt className="font-medium">{c.e}</dt>
+              <dd className="leading-relaxed text-ink-soft">{c.fix}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section aria-labelledby="howto-heading" className="container-x mt-32">
+        <h2 id="howto-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">How to validate schema markup</h2>
+        <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
+          {steps.map((s, i) => (
+            <li key={s.t} className="border-t-2 border-ink pt-4">
+              <span className="font-mono text-sm text-ink-soft">Step {i + 1}</span>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight">{s.t}</h3>
+              <p className="mt-2 text-[0.95rem] leading-relaxed text-ink-soft">{s.d}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section aria-labelledby="faq-heading" className="container-x mt-32">
         <h2 id="faq-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">Questions</h2>
         <div className="mt-8 max-w-3xl divide-y divide-rule border-y border-rule">
           {faqs.map((f) => (
@@ -137,6 +486,19 @@ export default function SchemaValidatorPage() {
               <p className="mt-3 leading-relaxed text-ink-soft">{f.a}</p>
             </details>
           ))}
+        </div>
+      </section>
+
+      <section aria-label="About the author" className="container-x mt-24">
+        <div className="flex max-w-3xl flex-col gap-5 rounded-xl border border-rule bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Byline />
+            <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
+              Built from the checks I run in real technical SEO audits. Updated{" "}
+              <time dateTime={UPDATED}>20 November 2026</time>, with Google&apos;s structured data rules current to that date.
+            </p>
+          </div>
+          <LinkedInLink className="shrink-0" />
         </div>
       </section>
     </>

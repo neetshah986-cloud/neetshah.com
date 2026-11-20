@@ -73,7 +73,7 @@ export type Rendering = {
 };
 
 export type Report = {
-  source: { kind: "url" | "code"; url?: string; finalUrl?: string; status?: number; bytes?: number; ms?: number; fetchedAs?: "tool" | "browser" };
+  source: { kind: "url" | "code"; url?: string; finalUrl?: string; status?: number; bytes?: number; ms?: number };
   html: string; // the source that was checked, for the source viewer
   vocabVersion: string;
   blocks: Block[];

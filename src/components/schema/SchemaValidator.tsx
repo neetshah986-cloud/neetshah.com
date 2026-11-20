@@ -888,6 +888,11 @@ export function SchemaValidator() {
                   <p className="mt-1 text-sm text-ink-soft">
                     HTTP {report.source.status} · {((report.source.bytes ?? 0) / 1024).toFixed(0)} KB · fetched in {((report.source.ms ?? 0) / 1000).toFixed(1)}s
                   </p>
+                  {report.source.fetchedAs === "browser" && (
+                    <p className="mt-1 text-sm text-ink-soft">
+                      This site stalled or blocked the tool&apos;s own requests, so the page was fetched with standard browser headers.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-ink-soft">Pasted code</p>

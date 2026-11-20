@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const url = String(body.url ?? "").trim();
     if (!url) return Response.json({ error: "Enter a URL to check." }, { status: 400 });
     const page = await fetchPage(url);
-    const report = analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status, bytes: page.bytes, ms: page.ms });
+    const report = analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status, bytes: page.bytes, ms: page.ms, fetchedAs: page.identity });
     if (report.rendering?.tagManager) report.rendering.gtm = await inspectGtm(page.html);
     const looksBlocked = [202, 401, 403, 429, 503].includes(page.status) && Object.keys(report.items).length === 0;
     if (looksBlocked) {

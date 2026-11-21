@@ -7,6 +7,7 @@ import { formatBytes, RATING_LABEL, type MetricKey } from "@/lib/speed/metrics";
 import { summarise, type TemplateSummary } from "@/lib/speed/templates";
 import type { SpeedRun, Strategy } from "@/lib/speed/types";
 import { DeviceToggle, type Job, pageLabel, Progress, RunDetail, ratingText, scoreText, useTicker } from "./Multi";
+import { Glossed } from "./Glossary";
 import { ToneIcon } from "./ui";
 
 type Group = PageGroup & { on: boolean };
@@ -256,7 +257,7 @@ export function PageTypes() {
                     return `${lead}: ${nums(slowest.s)}.${best}`;
                   })()}
                 </p>
-                {slowest.s.worst?.cause && <p className="mt-2 leading-relaxed text-ink-soft">{slowest.s.worst.cause}</p>}
+                {slowest.s.worst?.cause && <p className="mt-2 leading-relaxed text-ink-soft"><Glossed text={slowest.s.worst.cause} /></p>}
                 {slowest.s.common[0] && (
                   <p className="mt-3 rounded-lg bg-mist/70 px-4 py-3 leading-relaxed">
                     <span className="font-medium">Fix first:</span> {slowest.s.common[0].title}.
@@ -345,7 +346,7 @@ export function PageTypes() {
                       <span className="font-medium">
                         {s.worst.key} {s.worst.display}.
                       </span>{" "}
-                      {s.worst.cause}
+                      <Glossed text={s.worst.cause} />
                     </span>
                   </p>
                 )}

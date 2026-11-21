@@ -3,10 +3,10 @@ import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { Byline, LinkedInLink } from "@/components/Person";
 import { SpeedTool } from "@/components/speed/SpeedTool";
-import { ScoreCalculator } from "@/components/speed/ScoreCalculator";
+import { LazyCalculator } from "@/components/speed/LazyCalculator";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-21T19:00:00+05:30";
+const UPDATED = "2026-11-21T21:30:00+05:30";
 const URL = `${site.url}/tools/page-speed-test`;
 const TITLE = "Page Speed Test: Core Web Vitals Checker With Fixes";
 
@@ -120,6 +120,27 @@ const ScriptsExample = () => (
         </li>
       ))}
     </ul>
+  </Panel>
+);
+
+const InpFinderExample = () => (
+  <Panel label="INP finder, running on your own page">
+    <div className="flex items-baseline justify-between text-sm">
+      <span>Estimated INP for this visit</span>
+      <span className="text-2xl font-semibold text-warn">330 ms</span>
+    </div>
+    <div className="mt-3 rounded border border-rule px-3 py-2 text-sm">
+      <div className="flex justify-between gap-3">
+        <span className="truncate font-mono text-[0.8rem]">click on button#add-to-cart</span>
+        <span className="font-semibold text-warn">330 ms</span>
+      </div>
+      <div className="mt-2 flex h-2 overflow-hidden rounded-full" aria-hidden>
+        <span className="w-[2%] bg-warn" />
+        <span className="w-[95%] bg-serp" />
+        <span className="w-[3%] bg-pass" />
+      </div>
+      <p className="mt-1.5 text-xs text-ink-soft">Slowest script: theme.js addToCart(), 320 ms</p>
+    </div>
   </Panel>
 );
 
@@ -387,6 +408,15 @@ const features = [
     Example: ScriptsExample,
   },
   {
+    id: "inp-finder",
+    title: "Find the exact tap or click behind a poor INP",
+    body: [
+      "Google's lab test can't click or type, so it can't measure INP, the Core Web Vital most sites fail. The INP finder can: start it on your own page in Chrome with one bookmark (or paste it into the console), then use the page like a visitor.",
+      "A panel lists every slow interaction with the element, how the time splits between waiting, running code and drawing, and the script and function responsible, including which WordPress plugin or Shopify app it belongs to. Paste the results back into the tool for the cause and the fix in plain words. Nothing is sent anywhere.",
+    ],
+    Example: InpFinderExample,
+  },
+  {
     id: "leaderboard",
     title: "Rank your page against the pages above you in Google",
     body: [
@@ -497,6 +527,7 @@ const comparison: { label: string; us: string; psi: string }[] = [
   { label: "Raw HTML check for crawlers that don't run JavaScript", us: "Yes", psi: "No" },
   { label: "Copy-ready report for a developer", us: "Yes", psi: "No" },
   { label: "Compare with a competitor's page, with the reasons one is faster", us: "Yes", psi: "No" },
+  { label: "Find the slow tap or click behind INP, with the element and the script", us: "Yes", psi: "No" },
   { label: "Rank up to 6 pages for one keyword by Core Web Vitals and speed", us: "Yes", psi: "No" },
   { label: "Test a site by page type from its sitemap, with template-level fixes", us: "Yes", psi: "No" },
   { label: "Read a Search Console Core Web Vitals export and find each group's cause", us: "Yes", psi: "No" },
@@ -553,6 +584,10 @@ const faqs = [
   {
     q: "How do I compare my page speed with a competitor's?",
     a: "Click \"Compare with a competitor\" under the URL box, add their page, and run the test. Compare similar pages, such as your product page against theirs. The head-to-head view shows who's faster on mobile and desktop and why, and the reasons where you're behind link straight to the fixes. To compare against several pages ranking for the same keyword, use the Speed leaderboard tab. Both can be shared: the link includes the URLs.",
+  },
+  {
+    q: "How do I find what's causing a poor INP?",
+    a: "Open the INP finder tab in your results. Drag the INP finder button to your bookmarks bar (or copy the script into the DevTools console), open your page in Chrome and use it like a visitor: menus, filters, add to cart, search. The panel shows each slow interaction, the element, and the script behind it. Set CPU to 4x slowdown in DevTools to feel what a mid-range phone feels, then paste the results into the tool for the fix.",
   },
   {
     q: "How do I check the page speed of a whole website?",
@@ -738,11 +773,11 @@ export default function PageSpeedTestPage() {
           See exactly how Lighthouse turns five lab metrics into the 0 to 100 performance score, and what it would take to reach 90. Type your numbers or drag the sliders: the calculator uses Lighthouse&apos;s own scoring curves and weights, so it gives the same score as a real report.
         </p>
         <div className="mt-8">
-          <ScoreCalculator />
+          <LazyCalculator />
         </div>
       </section>
 
-      <section aria-labelledby="features-heading" className="container-x mt-32">
+      <section aria-labelledby="features-heading" className="container-x mt-32 [content-visibility:auto] [contain-intrinsic-size:auto_1200px]">
         <div className="max-w-3xl">
           <h2 id="features-heading" className="text-3xl font-semibold tracking-tight sm:text-5xl">From a slow score to the exact fix</h2>
           <p className="mt-5 text-lg leading-relaxed text-ink-soft">
@@ -768,7 +803,7 @@ export default function PageSpeedTestPage() {
         </div>
       </section>
 
-      <section aria-labelledby="compare-heading" className="container-x mt-32">
+      <section aria-labelledby="compare-heading" className="container-x mt-32 [content-visibility:auto] [contain-intrinsic-size:auto_1200px]">
         <h2 id="compare-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">How it compares with PageSpeed Insights</h2>
         <p className="mt-4 max-w-3xl leading-relaxed text-ink-soft">
           The measurements come from the same place: Google&apos;s PageSpeed Insights API. The difference is what you get to act on.
@@ -798,7 +833,7 @@ export default function PageSpeedTestPage() {
         <p className="mt-3 text-sm text-ink-soft">Compared in November 2026.</p>
       </section>
 
-      <section id="howto" aria-labelledby="howto-heading" className="container-x mt-32">
+      <section id="howto" aria-labelledby="howto-heading" className="container-x mt-32 [content-visibility:auto] [contain-intrinsic-size:auto_1200px]">
         <h2 id="howto-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">How to test page speed and fix Core Web Vitals</h2>
         <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-5 lg:gap-6">
           {steps.map((s, i) => (
@@ -811,7 +846,7 @@ export default function PageSpeedTestPage() {
         </ol>
       </section>
 
-      <section id="faq" aria-labelledby="faq-heading" className="container-x mt-32">
+      <section id="faq" aria-labelledby="faq-heading" className="container-x mt-32 [content-visibility:auto] [contain-intrinsic-size:auto_1200px]">
         <h2 id="faq-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">FAQs on Page Speed Test</h2>
         <div className="mt-8 max-w-3xl divide-y divide-rule border-y border-rule">
           {faqs.map((f) => (

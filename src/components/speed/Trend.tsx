@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { prefetchTrend, trendCache, type TrendState } from "@/lib/speed/trend-client";
 import { formatMetric, formatThreshold, METRICS, rate, RATING_LABEL, thresholds } from "@/lib/speed/metrics";
-import type { Strategy, Trend, TrendMetric } from "@/lib/speed/types";
+import type { Strategy, TrendMetric } from "@/lib/speed/types";
 import { ToneIcon } from "./ui";
 
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -136,32 +137,6 @@ function TrendChart({ m, ends, strategy }: { m: TrendMetric; ends: string[]; str
       )}
     </figure>
   );
-}
-
-type TrendState = { loading: boolean; trend?: Trend | null; error?: string };
-
-// The trend is fetched in the background as soon as a test finishes, and kept
-// for the rest of the visit, so opening the tab shows it straight away.
-const trendCache = new Map<string, { done?: TrendState; promise: Promise<TrendState> }>();
-
-export function prefetchTrend(url: string, strategy: Strategy): Promise<TrendState> {
-  const key = `${strategy}|${url}`;
-  const hit = trendCache.get(key);
-  if (hit) return hit.promise;
-  const entry: { done?: TrendState; promise: Promise<TrendState> } = { promise: Promise.resolve({ loading: true }) };
-  entry.promise = fetch("/api/page-speed/trend", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, strategy }) })
-    .then(async (r) => {
-      const d = await r.json().catch(() => ({}));
-      return r.ok ? { loading: false, trend: d.trend ?? null } : { loading: false, error: d.error ?? "Couldn't load the history." };
-    })
-    .catch(() => ({ loading: false, error: "Couldn't load the history." }))
-    .then((st: TrendState) => {
-      if (st.error) trendCache.delete(key);
-      else entry.done = st;
-      return st;
-    });
-  trendCache.set(key, entry);
-  return entry.promise;
 }
 
 export function TrendSection({ url, strategy }: { url: string; strategy: Strategy }) {

@@ -4,6 +4,7 @@ import { Fragment, useMemo } from "react";
 import { compareRuns, hostOf, type Reason, type Side } from "@/lib/speed/compare";
 import type { SpeedRun } from "@/lib/speed/types";
 import { ReplaySection } from "./Replay";
+import { Glossed } from "./Glossary";
 import { ToneIcon } from "./ui";
 
 function scoreTone(s: number) {
@@ -42,7 +43,7 @@ function ReasonList({ items, tone, empty, onFix }: { items: Reason[]; tone: "goo
             <ToneIcon tone={tone} className="mt-0.5 h-4 w-4" />
             {r.title}
           </p>
-          <p className="mt-1.5 pl-[1.6rem] text-[0.93rem] leading-relaxed text-ink-soft">{r.detail}</p>
+          <p className="mt-1.5 pl-[1.6rem] text-[0.93rem] leading-relaxed text-ink-soft"><Glossed text={r.detail} /></p>
           {r.fix && (
             <p className="mt-2 pl-[1.6rem] text-[0.93rem] leading-relaxed">
               <span className="font-medium">What to do: </span>

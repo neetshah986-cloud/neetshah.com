@@ -60,3 +60,8 @@ export function Code({ block }: { block: CodeBlock }) {
   );
 }
 
+
+/** Same icon, keyed by a metric rating. */
+export function RatingIcon({ r, className = "h-4 w-4" }: { r: "good" | "ni" | "poor"; className?: string }) {
+  return <ToneIcon tone={r} className={className} />;
+}

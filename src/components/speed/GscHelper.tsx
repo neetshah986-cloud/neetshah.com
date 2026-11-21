@@ -6,6 +6,7 @@ import { readGscFile, readGscText, type GscExport, type GscMetric } from "@/lib/
 import { formatMetric, RATING_LABEL, type MetricKey } from "@/lib/speed/metrics";
 import type { Finding, SpeedRun, Strategy } from "@/lib/speed/types";
 import { DeviceToggle, type Job, pageLabel, Progress, RunDetail, ratingText, scoreText, useTicker } from "./Multi";
+import { Glossed } from "./Glossary";
 import { ToneIcon } from "./ui";
 
 const MAX_TESTS = 10;
@@ -300,7 +301,7 @@ export function GscHelper() {
                   {diag && (
                     <p className="mt-4 leading-relaxed">
                       <span className="font-medium">Cause: </span>
-                      {diag.headline} {diag.detail && <span className="text-ink-soft">{diag.detail}</span>}
+                      <Glossed text={diag.headline} /> {diag.detail && <span className="text-ink-soft"><Glossed text={diag.detail} /></span>}
                     </p>
                   )}
                   {fixes.length > 0 ? (

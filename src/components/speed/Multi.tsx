@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { hostOf } from "@/lib/speed/compare";
 import type { Rating } from "@/lib/speed/metrics";
 import type { SpeedRun, Strategy } from "@/lib/speed/types";
-import { RunView, type ResultTab } from "./PageSpeed";
+import { RunView, type ResultTab } from "./Report";
 import { ToneIcon } from "./ui";
 
 export const scoreText = (s: number) => (s >= 90 ? "text-pass" : s >= 50 ? "text-warn" : "text-fail");

@@ -1,10 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { GscHelper } from "./GscHelper";
-import { Leaderboard } from "./Leaderboard";
 import { PageSpeed } from "./PageSpeed";
-import { PageTypes } from "./PageTypes";
+
+// Only "Test a page" loads with the page; the other modes load when their tab is opened.
+const Loading = () => <div className="h-56 animate-pulse rounded-2xl border border-rule bg-white motion-reduce:animate-none" aria-label="Loading" />;
+const Leaderboard = dynamic(() => import("./Leaderboard").then((m) => m.Leaderboard), { loading: Loading });
+const PageTypes = dynamic(() => import("./PageTypes").then((m) => m.PageTypes), { loading: Loading });
+const GscHelper = dynamic(() => import("./GscHelper").then((m) => m.GscHelper), { loading: Loading });
 
 type Mode = "page" | "compare" | "leaderboard" | "types" | "gsc";
 

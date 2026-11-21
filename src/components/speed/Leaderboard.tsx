@@ -7,6 +7,7 @@ import { boardCsv, rankBoard, type Entrant, type Ranked } from "@/lib/speed/lead
 import { formatBytes, formatMetric, rate, thresholds, type MetricKey } from "@/lib/speed/metrics";
 import type { SpeedRun, Strategy } from "@/lib/speed/types";
 import { DeviceToggle, downloadText, pageLabel, Progress, RunDetail, ratingText, scoreText, useTicker } from "./Multi";
+import { Glossed } from "./Glossary";
 import { ToneIcon } from "./ui";
 import { VersusSection } from "./Versus";
 
@@ -270,7 +271,7 @@ export function Leaderboard() {
                         <li key={r.title} className="flex gap-2.5">
                           <ToneIcon tone={board.you === board.leader ? "good" : "poor"} className="mt-1 h-4 w-4" />
                           <span>
-                            <span className="font-medium">{r.title}.</span> <span className="text-ink-soft">{r.detail}</span>
+                            <span className="font-medium">{r.title}.</span> <span className="text-ink-soft"><Glossed text={r.detail} /></span>
                             {r.fix && <span className="block text-[0.93rem]">What to do: {r.fix}</span>}
                           </span>
                         </li>

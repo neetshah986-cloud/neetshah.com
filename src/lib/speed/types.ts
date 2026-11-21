@@ -61,6 +61,8 @@ export type Finding = {
   code: CodeBlock[];
   /** Who usually makes the change. */
   owner?: string;
+  /** Steps for the platform the site is built on, when it was detected. */
+  platformSteps?: { title: string; steps: string[] };
 };
 
 export type Phase = { label: string; ms: number; share: number; tip: string; main: boolean };
@@ -116,6 +118,7 @@ export type SpeedRun = {
   thirdParties: { name: string; bytes: number; mainThreadMs: number }[];
   crawler: CrawlerView;
   waterfall: Waterfall;
+  platform: { id: string; name: string; extras: string[]; cloudflare: boolean } | null;
   warnings: string[];
 };
 

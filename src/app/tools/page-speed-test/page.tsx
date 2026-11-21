@@ -5,7 +5,7 @@ import { Byline, LinkedInLink } from "@/components/Person";
 import { PageSpeed } from "@/components/speed/PageSpeed";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-20T23:45:00+05:30";
+const UPDATED = "2026-11-21T12:45:00+05:30";
 const URL = `${site.url}/tools/page-speed-test`;
 const TITLE = "Page Speed Test: Core Web Vitals Checker With Fixes";
 
@@ -157,6 +157,21 @@ const CrawlerExample = () => (
   </Panel>
 );
 
+const PlatformExample = () => (
+  <Panel label="Steps for the platform the site is built on">
+    <p className="inline-flex items-center gap-1.5 rounded-md bg-mist px-2.5 py-1 text-sm">
+      <span className="text-ink-soft">Built with</span> <b className="font-medium">WordPress</b> <span className="text-ink-soft">+ WP Rocket, Elementor</span>
+    </p>
+    <div className="mt-3 rounded-lg border border-serp/30 bg-serp/[0.04] p-3">
+      <p className="text-sm font-semibold text-serp">On your WordPress site (with WP Rocket)</p>
+      <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-sm">
+        <li>WP Rocket → Media → LazyLoad: add &quot;hero-banner.webp&quot; to &quot;Excluded images or iframes&quot;.</li>
+        <li>Clear the cache and test again.</li>
+      </ol>
+    </div>
+  </Panel>
+);
+
 const ReportExample = () => (
   <Panel label="Copy report for a developer">
     <pre className="overflow-hidden whitespace-pre-wrap font-mono text-[0.76rem] leading-relaxed text-ink-soft">{`1. Load the main image (LCP element) sooner
@@ -241,6 +256,15 @@ const features = [
     Example: CrawlerExample,
   },
   {
+    id: "platform",
+    title: "Fix steps for WordPress, Shopify, Next.js, Wix and more",
+    body: [
+      "The tool recognises what the site is built with from the files it loads: WordPress (and speed plugins such as WP Rocket, LiteSpeed Cache, W3 Total Cache and Autoptimize, plus Elementor and WooCommerce), Shopify, Next.js, Wix, Squarespace, Webflow and others.",
+      "Each fix then starts with steps for that platform, down to the menu and setting to change, so a site owner or a new SEO can act without touching code. The developer steps are still there underneath.",
+    ],
+    Example: PlatformExample,
+  },
+  {
     id: "report",
     title: "Hand developers a report they can act on",
     body: [
@@ -258,6 +282,7 @@ const comparison: { label: string; us: string; psi: string }[] = [
   { label: "Fixed HTML generated from the element's own code", us: "Yes", psi: "No" },
   { label: "Changes highlighted in the code", us: "Yes", psi: "No" },
   { label: "Fixes ranked by Core Web Vitals impact, with steps", us: "Yes", psi: "Lists insights" },
+  { label: "Step-by-step fixes for the detected platform and speed plugin", us: "Yes", psi: "Short tips for some platforms" },
   { label: "Raw HTML check for crawlers that don't run JavaScript", us: "Yes", psi: "No" },
   { label: "Copy-ready report for a developer", us: "Yes", psi: "No" },
 ];
@@ -560,7 +585,7 @@ export default function PageSpeedTestPage() {
           <div>
             <Byline />
             <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
-              Built from the way I diagnose Core Web Vitals in real technical SEO audits. Updated <time dateTime={UPDATED}>20 November 2026</time>, with Google&apos;s thresholds and Lighthouse 13 current to that date.
+              Built from the way I diagnose Core Web Vitals in real technical SEO audits. Updated <time dateTime={UPDATED}>21 November 2026</time>, with Google&apos;s thresholds and Lighthouse 13 current to that date.
             </p>
           </div>
           <LinkedInLink className="shrink-0" />

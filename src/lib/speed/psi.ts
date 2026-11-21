@@ -1,6 +1,7 @@
 // Calls Google's PageSpeed Insights API (Lighthouse on Google's servers, plus Chrome UX Report field data).
 import * as cheerio from "cheerio";
 import { FetchError, fetchPage } from "@/lib/safe-fetch";
+import { htmlHints } from "./platform";
 import type { RawHtml } from "./report";
 import type { Strategy } from "./types";
 
@@ -55,6 +56,7 @@ export async function runPsi(url: string, strategy: Strategy): Promise<unknown> 
 export async function rawHtml(url: string): Promise<RawHtml> {
   try {
     const page = await fetchPage(url, { timeoutMs: 10_000 });
+    const hints = htmlHints(page.html);
     const $ = cheerio.load(page.html);
     const title = $("title").first().text().trim();
     const hasH1 = $("h1").length > 0;
@@ -63,8 +65,8 @@ export async function rawHtml(url: string): Promise<RawHtml> {
     const words = text ? text.split(" ").length : 0;
     const scripts = (page.html.match(/<script\b/gi) ?? []).length;
     const appShell = words < 60 && scripts >= 3;
-    if (page.status >= 400) return { words, hasH1, title, appShell, error: `The server returned HTTP ${page.status} to a plain request.` };
-    return { words, hasH1, title, appShell };
+    if (page.status >= 400) return { words, hasH1, title, appShell, hints, error: `The server returned HTTP ${page.status} to a plain request.` };
+    return { words, hasH1, title, appShell, hints };
   } catch (e) {
     return { words: 0, hasH1: false, title: "", appShell: false, error: e instanceof Error ? e.message : "Couldn't fetch the raw HTML." };
   }

@@ -19,8 +19,12 @@ export function findingText(f: Finding, n?: number): string {
     for (const r of f.resources.slice(0, 10))
       out.push(`     - ${r.url}${r.bytes ? ` (${formatBytes(r.bytes)}${r.wastedBytes ? `, ${formatBytes(r.wastedBytes)} can be saved` : ""})` : ""}${r.ms ? ` ${formatMs(r.ms)}` : ""}${r.note ? ` ${r.note}` : ""}${r.thirdParty ? " [third party]" : ""}`);
   }
+  if (f.platformSteps) {
+    out.push(`   ${f.platformSteps.title}:`);
+    f.platformSteps.steps.forEach((s, i) => out.push(`     ${i + 1}) ${s}`));
+  }
   if (f.steps.length) {
-    out.push("   How to fix:");
+    out.push(f.platformSteps ? "   Developer steps:" : "   How to fix:");
     f.steps.forEach((s, i) => out.push(`     ${i + 1}) ${s}`));
   }
   for (const c of f.code) out.push(`   ${c.label}:`, ...c.code.split("\n").map((l) => `       ${l}`));
@@ -32,6 +36,7 @@ export function devReport(run: SpeedRun): string {
   lines.push(`Page speed report: ${run.finalUrl}`);
   lines.push(`${run.strategy === "mobile" ? "Mobile" : "Desktop"}, tested ${new Date(run.fetchedAt).toUTCString()} with Lighthouse ${run.lighthouseVersion} (PageSpeed Insights)`);
   lines.push(`Performance score: ${run.score}/100`);
+  if (run.platform) lines.push(`Built with: ${run.platform.name}${run.platform.extras.length ? ` (${run.platform.extras.join(", ")})` : ""}${run.platform.cloudflare ? ", behind Cloudflare" : ""}`);
   lines.push("");
   if (run.field) {
     lines.push(`REAL USERS (Chrome UX Report, last 28 days, ${run.field.scope === "url" ? "this URL" : "whole site"})`);

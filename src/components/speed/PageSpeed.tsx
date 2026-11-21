@@ -465,9 +465,20 @@ function FindingCard({ f, run, open, onToggle, n }: { f: Finding; run: SpeedRun;
               </div>
             )}
 
+            {f.platformSteps && (
+              <div className="rounded-xl border border-serp/30 bg-serp/[0.04] p-4">
+                <p className="text-sm font-semibold text-serp">{f.platformSteps.title}</p>
+                <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[0.95rem] leading-relaxed marker:text-ink-soft">
+                  {f.platformSteps.steps.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             {f.steps.length > 0 && (
               <div>
-                <p className="text-sm font-semibold">How to fix it</p>
+                <p className="text-sm font-semibold">{f.platformSteps ? "Steps for a developer" : "How to fix it"}</p>
                 <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[0.95rem] leading-relaxed marker:text-ink-soft">
                   {f.steps.map((s, i) => (
                     <li key={i}>{s}</li>
@@ -612,6 +623,14 @@ function RunView({ run }: { run: SpeedRun }) {
           <p className="text-sm text-ink-soft">
             {run.strategy === "mobile" ? "Mobile" : "Desktop"} performance score (lab). <span className="break-all">{run.finalUrl}</span>
           </p>
+          {run.platform && (
+            <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-md bg-mist px-2.5 py-1 text-sm">
+              <span className="text-ink-soft">Built with</span>
+              <span className="font-medium">{run.platform.name}</span>
+              {run.platform.extras.length > 0 && <span className="text-ink-soft">+ {run.platform.extras.join(", ")}</span>}
+              {run.platform.cloudflare && <span className="text-ink-soft">behind Cloudflare</span>}
+            </p>
+          )}
           <p className="mt-1 text-2xl font-semibold tracking-tight">
             {cwv === null ? "Core Web Vitals: not enough real-user data" : cwv ? "Core Web Vitals assessment: passed" : "Core Web Vitals assessment: failed"}
           </p>

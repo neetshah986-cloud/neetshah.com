@@ -2,6 +2,7 @@
 import { buildDiagnoses, metricValue } from "./diagnose";
 import { buildFindings, getAttr, passedAudits, toNode, type Audit, type Ctx } from "./fixes";
 import { buildWaterfall } from "./waterfall";
+import { addPlatformSteps, detectPlatform } from "./platform";
 import { rate, type MetricKey } from "./metrics";
 import type { CrawlerView, FieldData, FieldMetric, MetricValue, SpeedRun, Strategy } from "./types";
 
@@ -32,7 +33,7 @@ export function parseField(le: any, strategy: Strategy): FieldData | null {
   return { scope: le.origin_fallback || /^origin:/.test(le.id ?? "") ? "origin" : "url", metrics, passed };
 }
 
-export type RawHtml = { words: number; hasH1: boolean; title: string; appShell: boolean; error?: string };
+export type RawHtml = { words: number; hasH1: boolean; title: string; appShell: boolean; hints?: string[]; error?: string };
 
 export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw?: RawHtml | null): SpeedRun {
   const lhr = psi.lighthouseResult ?? psi;
@@ -98,6 +99,11 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
   const field = parseField(psi.loadingExperience, strategy);
   const originField = parseField(psi.originLoadingExperience, strategy);
   const findings = buildFindings(ctx);
+  const platform = detectPlatform(
+    ((audits["network-requests"]?.details?.items ?? []) as any[]).map((r) => String(r.url ?? "")),
+    raw?.hints ?? [],
+  );
+  addPlatformSteps(findings, platform, lcpUrl);
   const diagnoses = buildDiagnoses(ctx, lab, field, findings);
 
   const fps = lhr.fullPageScreenshot?.screenshot;
@@ -148,6 +154,7 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
     })),
     crawler,
     waterfall: buildWaterfall(audits, origin, lcpUrl),
+    platform: platform ? { id: platform.id, name: platform.name, extras: platform.extraNames, cloudflare: platform.cloudflare } : null,
     warnings: (lhr.runWarnings ?? []).map(String),
   };
 }

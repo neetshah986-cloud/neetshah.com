@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { devReport, findingText } from "@/lib/speed/devreport";
 import { formatBytes, formatMs, formatThreshold, METRICS, RATING_LABEL, thresholds, type MetricKey, type Rating } from "@/lib/speed/metrics";
 import type { CodeBlock, Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Strategy } from "@/lib/speed/types";
+import { TrendSection } from "./Trend";
+import { WaterfallSection } from "./Waterfall";
 
 // ---------- small pieces ----------
 
@@ -644,6 +646,11 @@ function RunView({ run }: { run: SpeedRun }) {
       </section>
 
       <section>
+        <SectionTitle sub="Six months of weekly real-visitor data from the Chrome UX Report, with what changed and when.">Real-visitor trend</SectionTitle>
+        <TrendSection url={run.finalUrl} strategy={run.strategy} />
+      </section>
+
+      <section>
         <SectionTitle sub={`One load in Google's lab on a ${run.strategy === "mobile" ? "mid-range phone with a slow 4G connection" : "desktop with a fast connection"}. Use it to find causes; numbers vary a little from run to run.`}>Lab test (this run)</SectionTitle>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {labKeys.map((k) => (
@@ -693,6 +700,13 @@ function RunView({ run }: { run: SpeedRun }) {
           <p className="text-ink-soft">Lighthouse found nothing worth fixing on this page.</p>
         )}
       </section>
+
+      {run.waterfall?.rows.length > 0 && (
+        <section>
+          <SectionTitle sub="Every file the page loaded, in order, and what the pattern says about why the page is slow.">Request waterfall</SectionTitle>
+          <WaterfallSection wf={run.waterfall} />
+        </section>
+      )}
 
       <section>
         <SectionTitle sub="Most AI crawlers, including the ones behind ChatGPT, Claude and Perplexity, read the raw HTML without running JavaScript. These checks show what they get.">Search and AI crawler view</SectionTitle>

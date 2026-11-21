@@ -115,5 +115,59 @@ export type SpeedRun = {
   weight: { type: string; label: string; requests: number; bytes: number }[];
   thirdParties: { name: string; bytes: number; mainThreadMs: number }[];
   crawler: CrawlerView;
+  waterfall: Waterfall;
   warnings: string[];
+};
+
+// ---------- request waterfall ----------
+
+export type WaterfallRow = {
+  id: number;
+  url: string;
+  label: string;
+  type: "Document" | "Stylesheet" | "Script" | "Font" | "Image" | "Other";
+  /** When the browser found the file, sent the request, and finished downloading (ms from navigation). */
+  found: number;
+  sent: number;
+  end: number;
+  bytes: number;
+  status: number;
+  priority: string;
+  protocol: string;
+  thirdParty: boolean;
+  entity?: string;
+  blocking: boolean;
+  lcp: boolean;
+  chain: boolean;
+};
+
+export type Tone = "good" | "ni" | "poor";
+
+export type WaterfallInsight = { id: string; tone: Tone; title: string; text: string; rows: number[]; action?: string };
+
+export type Waterfall = {
+  rows: WaterfallRow[];
+  marks: { fcp?: number; lcp?: number; dcl?: number; load?: number; htmlEnd?: number };
+  insights: WaterfallInsight[];
+};
+
+// ---------- real-visitor trend (CrUX History) ----------
+
+export type TrendMetric = {
+  key: "LCP" | "INP" | "CLS" | "FCP" | "TTFB";
+  p75: (number | null)[];
+  good: (number | null)[];
+  insights: { tone: Tone; text: string }[];
+};
+
+export type Trend = {
+  scope: "url" | "origin";
+  formFactor: "PHONE" | "DESKTOP";
+  /** Last day of each 28-day window, ISO date. */
+  ends: string[];
+  metrics: TrendMetric[];
+  /** Core Web Vitals pass per window: true, false or null (no data). */
+  cwv: (boolean | null)[];
+  headline: { tone: Tone; text: string };
+  notes: string[];
 };

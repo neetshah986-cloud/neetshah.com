@@ -1,6 +1,7 @@
 // Turns a PageSpeed Insights API response into the report the tool shows.
 import { buildDiagnoses, metricValue } from "./diagnose";
-import { buildFindings, passedAudits, toNode, type Audit, type Ctx } from "./fixes";
+import { buildFindings, getAttr, passedAudits, toNode, type Audit, type Ctx } from "./fixes";
+import { buildWaterfall } from "./waterfall";
 import { rate, type MetricKey } from "./metrics";
 import type { CrawlerView, FieldData, FieldMetric, MetricValue, SpeedRun, Strategy } from "./types";
 
@@ -62,13 +63,22 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
   // Natural image sizes and the LCP image URL, from the image delivery insight.
   const natural = new Map<string, [number, number]>();
   let lcpUrl: string | undefined;
-  const lcpPath = toNode((audits["lcp-breakdown-insight"]?.details?.items ?? []).find((i: any) => i.type === "node"))?.path;
+  const lcpNode = toNode((audits["lcp-breakdown-insight"]?.details?.items ?? []).find((i: any) => i.type === "node"));
+  const lcpPath = lcpNode?.path;
   for (const i of audits["image-delivery-insight"]?.details?.items ?? []) {
     for (const s of i.subItems?.items ?? []) {
       const m = String(s.reason ?? "").match(/\((\d+)x(\d+)\)/);
       if (m) natural.set(i.url, [Number(m[1]), Number(m[2])]);
     }
     if (lcpPath && i.node?.path === lcpPath) lcpUrl = i.url;
+  }
+  if (!lcpUrl && lcpNode && /^<img\b/i.test(lcpNode.snippet)) {
+    const src = getAttr(lcpNode.snippet, "src");
+    try {
+      if (src && !src.startsWith("data:")) lcpUrl = new URL(src, finalUrl).href;
+    } catch {
+      /* not a URL */
+    }
   }
 
   const ctx: Ctx = {
@@ -137,6 +147,7 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
       mainThreadMs: i.mainThreadTime ?? 0,
     })),
     crawler,
+    waterfall: buildWaterfall(audits, origin, lcpUrl),
     warnings: (lhr.runWarnings ?? []).map(String),
   };
 }

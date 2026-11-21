@@ -115,6 +115,8 @@ export async function POST(request: Request) {
         return Response.json(await fromSitemap(c));
       } catch (e) {
         lastError = e instanceof Error ? e.message : "";
+        // The site isn't answering at all (often bot protection): don't wait on every other location too.
+        if (e instanceof FetchError && e.status === 504) break;
       }
     }
     return Response.json({ error: `Couldn't find a readable sitemap for ${url.host}${lastError ? ` (${lastError})` : ""}. Enter the sitemap URL, or paste page URLs instead.` }, { status: 404 });

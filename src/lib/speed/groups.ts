@@ -47,7 +47,9 @@ function sample(urls: string[], n: number): string[] {
 
 export function groupUrls(items: { loc: string; source?: string }[], perGroup = 2, maxGroups = 8): PageGroup[] {
   const map = new Map<string, PageGroup>();
-  for (const it of items) {
+  // Only web pages: skip files such as PDFs, images, feeds and .md or .txt files listed in some sitemaps.
+  const isPage = (u: string) => !/\.(pdf|jpe?g|png|gif|webp|avif|svg|mp4|webm|mp3|zip|xml|txt|md|json|csv|xlsx?|docx?)$/i.test(pathOf(u));
+  for (const it of items.filter((x) => isPage(x.loc))) {
     const c = classify(it.loc, it.source);
     const g = map.get(c.key) ?? { key: c.key, label: c.label, urls: [], samples: [] };
     g.urls.push(it.loc);

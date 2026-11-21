@@ -213,7 +213,7 @@ export function PageTypes() {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="font-semibold">{g.label}</span>
-                      <span className="shrink-0 text-sm text-ink-soft">{g.urls.length.toLocaleString("en-IN")} URLs</span>
+                      <span className="shrink-0 text-sm text-ink-soft">{g.urls.length === 1 ? "1 URL" : `${g.urls.length.toLocaleString("en-IN")} URLs`}</span>
                     </span>
                     <span className="mt-1.5 block space-y-0.5">
                       {g.samples.map((u) => (
@@ -248,15 +248,19 @@ export function PageTypes() {
                   {running ? " (filling in as results arrive)" : ""}
                 </p>
                 <p className="mt-1 text-2xl font-semibold leading-snug tracking-tight">
-                  {summaries.length > 1
-                    ? `${slowest.group.label} are your slowest template: score ${slowest.s.score}${slowest.s.lab.LCP ? `, LCP ${slowest.s.lab.LCP.display}` : ""}.`
-                    : `${slowest.group.label}: score ${slowest.s.score}${slowest.s.lab.LCP ? `, LCP ${slowest.s.lab.LCP.display}` : ""}.`}
-                  {fastest && fastest.s.score - slowest.s.score >= 10 ? ` ${fastest.group.label} score ${fastest.s.score}.` : ""}
+                  {(() => {
+                    const name = (g: Group) => (g.key === "home" ? "the home page" : g.label.toLowerCase());
+                    const nums = (x: TemplateSummary) => `score ${x.score}${x.lab.LCP ? `, LCP ${x.lab.LCP.display}` : ""}`;
+                    const lead = summaries.length > 1 ? (slowest.group.key === "home" ? "The home page is your slowest page type" : `${slowest.group.label} are your slowest template`) : slowest.group.key === "home" ? "The home page" : slowest.group.label;
+                    const best = fastest && fastest.s.score - slowest.s.score >= 10 ? ` ${name(fastest.group).charAt(0).toUpperCase() + name(fastest.group).slice(1)} ${fastest.group.key === "home" ? "scores" : "score"} ${fastest.s.score}.` : "";
+                    return `${lead}: ${nums(slowest.s)}.${best}`;
+                  })()}
                 </p>
                 {slowest.s.worst?.cause && <p className="mt-2 leading-relaxed text-ink-soft">{slowest.s.worst.cause}</p>}
                 {slowest.s.common[0] && (
                   <p className="mt-3 rounded-lg bg-mist/70 px-4 py-3 leading-relaxed">
-                    <span className="font-medium">Fix first:</span> {slowest.s.common[0].title}. It appears on {slowest.s.common[0].seenIn} of {slowest.s.runs.length} {slowest.group.label.toLowerCase()} tested, so one change in the template fixes it on all {slowest.group.urls.length.toLocaleString("en-IN")}.
+                    <span className="font-medium">Fix first:</span> {slowest.s.common[0].title}.
+                    {slowest.group.urls.length > 1 && ` It appears on ${slowest.s.common[0].seenIn} of ${slowest.s.runs.length} ${slowest.group.label.toLowerCase()} tested, so one change in the template fixes it on all ${slowest.group.urls.length.toLocaleString("en-IN")}.`}
                   </p>
                 )}
               </section>
@@ -329,7 +333,7 @@ export function PageTypes() {
                   <div>
                     <h3 className="text-xl font-semibold tracking-tight">{group.label}</h3>
                     <p className="mt-1 text-sm text-ink-soft">
-                      {group.urls.length.toLocaleString("en-IN")} URLs of this type. {s.runs.length} tested{failed ? `, ${failed} failed` : ""}.
+                      {group.urls.length === 1 ? "1 URL" : `${group.urls.length.toLocaleString("en-IN")} URLs`} of this type. {s.runs.length} tested{failed ? `, ${failed} failed` : ""}.
                     </p>
                   </div>
                   <span className={`text-4xl font-semibold tracking-tight ${scoreText(s.score)}`}>{s.score}</span>

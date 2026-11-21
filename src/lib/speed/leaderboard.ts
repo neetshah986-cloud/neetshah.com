@@ -19,13 +19,21 @@ export type Board = {
 
 const cwvOf = (r: SpeedRun) => r.field?.passed ?? r.originField?.passed ?? null;
 
-/** The metric holding the page back most, with its root cause. */
+/** The metric holding the page back most, with its root cause. Real-visitor problems come first: they decide Core Web Vitals. */
 export function weakness(r: SpeedRun): Ranked["weakness"] {
+  const field = r.field ?? r.originField;
+  for (const rating of ["poor", "ni"] as const) {
+    const k = (["LCP", "INP", "CLS"] as MetricKey[]).find((m) => field?.metrics[m]?.rating === rating);
+    if (!k) continue;
+    const d = r.diagnoses.find((x) => x.metric === k) ?? (k === "INP" ? r.diagnoses.find((x) => x.metric === "TBT") : undefined);
+    const text = d?.metric === k ? d.headline : `Real visitors are in Google's ${rating === "poor" ? "poor" : "needs improvement"} range.${d ? ` In the lab: ${d.headline.charAt(0).toLowerCase()}${d.headline.slice(1)}` : ""}`;
+    return { metric: k, value: `${field!.metrics[k]!.display} (real visitors)`, text };
+  }
   const order: MetricKey[] = ["LCP", "INP", "CLS", "TBT", "FCP", "TTFB"];
   const pick = (rating: "poor" | "ni") => order.map((k) => r.diagnoses.find((d) => d.metric === k && d.rating === rating)).find(Boolean);
   const d = pick("poor") ?? pick("ni");
   if (!d) return undefined;
-  return { metric: d.metric, value: d.value, text: d.headline };
+  return { metric: d.metric, value: `${d.value}${field ? " (lab)" : ""}`, text: d.headline };
 }
 
 // Google uses real-visitor Core Web Vitals in Search, so pages that pass come first; the lab score breaks ties.

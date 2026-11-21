@@ -165,7 +165,8 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
       const lose = side === "you" ? b : a;
       reasons.push({
         side,
-        weight: (bandsDiffer ? 3 : 1) + Math.abs(diff) / f.scale,
+        // A real-visitor metric in a different band decides Core Web Vitals, so it leads the list.
+        weight: (bandsDiffer ? 20 : 1) + Math.abs(diff) / f.scale,
         title: cap(f.text(better(side), win.display, lose.display)),
         detail: `This is the 28-day real-visitor data Google uses for Core Web Vitals in Search.${bandsDiffer ? ` ${cap(better(side))}'s value is ${win.rating === "good" ? "in Google's good range" : "closer to Google's good range"}; ${worse(side)}'s ${lose.rating === "poor" ? "is poor" : "needs improvement"}.` : ""}`,
         fix: f.fix,
@@ -180,10 +181,12 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
     add(yLcp - tLcp, 500, 600, (side) => {
       const loser = side === "them" ? you : them;
       const why = loser.diagnoses.find((d) => d.metric === "LCP")?.headline;
+      const real = (loser.field ?? loser.originField)?.metrics.LCP;
+      const note = real?.rating === "good" ? ` Real visitors on ${worse(side)} already see the main content in ${real.display} (good), often thanks to caching and faster phones, so this lab gap matters less than it looks.` : "";
       return {
         phase: "lcp",
-        title: `${worse(side)}'s main content appears ${s(yLcp - tLcp)} later`,
-        detail: `Largest Contentful Paint is ${formatMs(side === "you" ? tLcp : yLcp)} against ${formatMs(side === "you" ? yLcp : tLcp)}.${why ? ` On ${worse(side)}: ${why.charAt(0).toLowerCase() + why.slice(1)}` : ""}`,
+        title: `${worse(side)}'s main content appears ${s(yLcp - tLcp)} later in the lab test`,
+        detail: `In the lab test, Largest Contentful Paint is ${formatMs(side === "you" ? tLcp : yLcp)} against ${formatMs(side === "you" ? yLcp : tLcp)}.${why ? ` On ${worse(side)}: ${why.charAt(0).toLowerCase() + why.slice(1)}` : ""}${note}`,
         fix: "Open Root causes for the LCP breakdown, then the matching fixes.",
         auditIds: ["lcp-breakdown-insight", "lcp-discovery-insight", "image-delivery-insight"],
       };
@@ -294,6 +297,13 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
       fix: textSide === "them" ? "If the hero image isn't essential, a text headline above it can become the main content and appear sooner." : undefined,
       auditIds: [],
     });
+  }
+
+  // A lab LCP gap counts for less when real visitors on the slower page already get a good LCP.
+  for (const r of reasons) {
+    if (r.phase !== "lcp") continue;
+    const loser = r.side === "them" ? you : them;
+    if ((loser.field ?? loser.originField)?.metrics.LCP?.rating === "good") r.weight *= 0.3;
   }
 
   // The LCP reason already names the slower page's biggest LCP phase: don't repeat it.

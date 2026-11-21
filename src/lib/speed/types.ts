@@ -37,6 +37,8 @@ export type FindingElement = {
   /** The element's current HTML, and the same element with the fix applied. */
   current?: string;
   fixed?: string;
+  /** When only one attribute should change (for example, Google shortened the rest of the tag). */
+  change?: { label: string; code: string };
 };
 
 export type FindingResource = { url: string; bytes?: number; wastedBytes?: number; ms?: number; note?: string; thirdParty?: boolean };

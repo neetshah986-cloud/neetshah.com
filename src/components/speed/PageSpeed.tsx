@@ -142,7 +142,7 @@ function Snapshot({ run, node, maxW = 340, maxH = 230 }: { run: SpeedRun; node: 
   );
 }
 
-function ElementBlock({ run, node, current, fixed, note }: { run: SpeedRun; node: NodeRef; current?: string; fixed?: string; note?: string }) {
+function ElementBlock({ run, node, current, fixed, note, change }: { run: SpeedRun; node: NodeRef; current?: string; fixed?: string; note?: string; change?: { label: string; code: string } }) {
   return (
     <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-rule bg-paper/60 p-4 @lg:flex-row">
       <Snapshot run={run} node={node} />
@@ -153,6 +153,15 @@ function ElementBlock({ run, node, current, fixed, note }: { run: SpeedRun; node
           <DiffSnippet current={current} fixed={fixed} />
         ) : (
           (current ?? node.snippet) && <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-rule bg-white px-3 py-2.5 font-mono text-[0.8rem] leading-relaxed">{current ?? node.snippet}</pre>
+        )}
+        {change && (
+          <div className="min-w-0 overflow-hidden rounded-lg border border-rule">
+            <p className="flex items-center justify-between gap-3 border-b border-rule bg-pass/[0.07] px-3 py-1.5 text-xs font-medium text-pass">
+              <span>{change.label}</span>
+              <CopyButton text={change.code} />
+            </p>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all bg-white px-3 py-2.5 font-mono text-[0.8rem] leading-relaxed">{change.code}</pre>
+          </div>
         )}
       </div>
     </div>
@@ -436,7 +445,7 @@ function FindingCard({ f, run, open, onToggle, n }: { f: Finding; run: SpeedRun;
                 <p className="mb-2 text-sm font-semibold">{f.elements.length > 1 ? `The ${f.elements.length} elements to change` : "The element to change"}</p>
                 <div className="space-y-3">
                   {f.elements.map((e, i) => (
-                    <ElementBlock key={i} run={run} node={e.node} current={e.current} fixed={e.fixed} note={e.note} />
+                    <ElementBlock key={i} run={run} node={e.node} current={e.current} fixed={e.fixed} note={e.note} change={e.change} />
                   ))}
                 </div>
               </div>

@@ -13,6 +13,7 @@ export function findingText(f: Finding, n?: number): string {
     out.push(`   Element: ${e.node.selector}${e.note ? ` (${e.note})` : ""}`);
     if (e.current) out.push(`     Now:   ${e.current}`);
     if (e.fixed) out.push(`     Fixed: ${e.fixed}`);
+    if (e.change) out.push(`     ${e.change.label}:`, ...e.change.code.split("\n").map((l) => `       ${l}`));
   }
   if (f.resources.length) {
     out.push("   Files:");

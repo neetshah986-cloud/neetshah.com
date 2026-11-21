@@ -319,14 +319,57 @@ const documentLatency: Builder = (a, c) => {
   });
 };
 
-function srcsetFor(src: string, displayW: number, naturalW?: number) {
-  const dot = src.lastIndexOf(".");
-  const q = src.indexOf("?");
-  const stem = dot > src.lastIndexOf("/") ? src.slice(0, dot) : q > 0 ? src.slice(0, q) : src;
-  const target = Math.ceil(displayW / 100) * 100;
-  const widths = [...new Set([Math.round(target / 2 / 10) * 10, target, Math.min(target * 2, naturalW ?? target * 2)])].filter((w) => w >= 200).sort((x, y) => x - y);
-  return { stem, widths, srcset: widths.map((w) => `${stem}-${w}.webp ${w}w`).join(", ") };
+type ImgFormat = "avif" | "webp" | "jpg" | "png" | "gif" | "svg" | "other";
+type ImgCdn = "shopify" | "next" | "cloudinary" | "imgix" | "wpcom" | "none";
+
+export function imageFormat(url: string): ImgFormat {
+  try {
+    const u = new URL(url, "https://x.invalid");
+    const q = (u.searchParams.get("format") ?? u.searchParams.get("fm") ?? "").toLowerCase();
+    const ext = (u.pathname.match(/\.([a-z0-9]+)$/i)?.[1] ?? "").toLowerCase();
+    const f = q || ext;
+    if (f === "avif") return "avif";
+    if (f === "webp") return "webp";
+    if (f === "jpg" || f === "jpeg") return "jpg";
+    if (f === "png") return "png";
+    if (f === "gif") return "gif";
+    if (f === "svg") return "svg";
+  } catch {
+    /* not a URL */
+  }
+  return "other";
 }
+
+export function imageCdn(url: string): ImgCdn {
+  if (/cdn\.shopify\.com|\/cdn\/shop\//.test(url)) return "shopify";
+  if (/\/_next\/image\?/.test(url)) return "next";
+  if (/res\.cloudinary\.com|\/image\/upload\//.test(url)) return "cloudinary";
+  if (/\.imgix\.net/.test(url)) return "imgix";
+  if (/\/\/i[0-3]\.wp\.com\//.test(url)) return "wpcom";
+  return "none";
+}
+
+/** The same image at another width, for CDNs that resize through the URL. Null when the CDN can't. */
+export function resizedUrl(url: string, w: number, cdn: ImgCdn): string | null {
+  try {
+    if (cdn === "cloudinary") return /\/upload\/(?:[^/]*\bw_\d+[^/]*\/)?/.test(url) ? url.replace(/\/upload\/(?:([^/]*?)\bw_\d+([^/]*)\/)?/, (_m, a = "", b = "") => `/upload/${a}w_${w}${b || ",c_limit,f_auto,q_auto"}/`) : null;
+    if (cdn === "none") return null;
+    const u = new URL(url.replace(/&amp;/g, "&"));
+    if (cdn === "shopify") {
+      u.searchParams.delete("height");
+      u.searchParams.set("width", String(w));
+    } else if (cdn === "next" || cdn === "wpcom") u.searchParams.set("w", String(w));
+    else if (cdn === "imgix") {
+      u.searchParams.set("w", String(w));
+      if (!u.searchParams.has("auto")) u.searchParams.set("auto", "format,compress");
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+const ceil10 = (n: number) => Math.ceil(n / 10) * 10;
 
 const imageDelivery: Builder = (a, c) => {
   if (!failing(a)) return null;
@@ -334,43 +377,102 @@ const imageDelivery: Builder = (a, c) => {
   if (!items.length) return null;
   const elements: FindingElement[] = [];
   const resources: FindingResource[] = [];
+  let anyLegacy = false;
   for (const i of items) {
     const node = toNode(i.node);
+    const format = imageFormat(i.url);
+    const modern = format === "avif" || format === "webp";
+    if (!modern && format !== "svg") anyLegacy = true;
+    const cdn = imageCdn(i.url);
     const reasons: string[] = (i.subItems?.items ?? []).map((s: any) => String(s.reason ?? "")).filter(Boolean);
     const plain = reasons.map((r) =>
       /modern image format|compression/i.test(r)
-        ? "Use WebP or AVIF, or compress it more."
+        ? modern
+          ? `It's already ${format.toUpperCase()}; compress it a little more (a lower quality setting is rarely visible).`
+          : "Convert it to AVIF (smallest) or WebP."
         : /larger than it needs to be/i.test(r)
-          ? r.replace(/^This image file is larger than it needs to be \((\d+)x(\d+)\) for its displayed dimensions \((\d+)x(\d+)\).*/i, "It's $1×$2 pixels but shown at $3×$4. Serve a smaller version.")
+          ? r.replace(/^This image file is larger than it needs to be \((\d+)x(\d+)\) for its displayed dimensions \((\d+)x(\d+)\).*/i, "The file is $1×$2 pixels but only $3×$4 is needed on this screen.")
           : /animated/i.test(r)
-            ? "It's an animated GIF. A video file is far smaller."
+            ? "It's an animated GIF. A short MP4 or WebM video is far smaller."
             : r,
     );
     resources.push({ url: i.url, bytes: i.totalBytes, wastedBytes: i.wastedBytes, note: plain.join(" "), thirdParty: isThirdParty(i.url, c.origin) });
-    if (node && /^<img\b/i.test(node.snippet)) {
-      const src = getAttr(node.snippet, "src") ?? codeUrl(i.url, c.origin);
-      const nat = c.natural.get(i.url);
-      const displayW = (node.rect?.width ?? 600) * c.dpr;
-      const { stem, widths, srcset } = srcsetFor(src, displayW, nat?.[0]);
-      const ratio = node.rect ? node.rect.width / c.viewportWidth : 1;
-      const sizes = ratio >= 0.9 ? "100vw" : `(max-width: ${Math.round(c.viewportWidth)}px) ${Math.round(ratio * 100)}vw, ${Math.round(node.rect?.width ?? 600)}px`;
-      let fixed = setAttr(node.snippet, "src", `${stem}-${widths[Math.min(1, widths.length - 1)]}.webp`);
-      fixed = setAttr(fixed, "srcset", srcset);
-      fixed = setAttr(fixed, "sizes", sizes);
-      const [w, h] = nat ?? (node.rect ? [Math.round(node.rect.width), Math.round(node.rect.height)] : [0, 0]);
-      if (w && h && !getAttr(fixed, "width")) fixed = setAttr(setAttr(fixed, "width", String(w)), "height", String(h));
-      fixed = keepLcpFast(fixed, node, c);
-      elements.push({
-        node,
-        note: `${formatBytes(i.totalBytes)} now, about ${formatBytes(Math.max(0, i.totalBytes - i.wastedBytes))} after the fix. ${plain.join(" ")}`,
-        current: node.snippet,
-        fixed,
-      });
-    } else if (node) elements.push({ node, note: plain.join(" ") });
+    if (!node) continue;
+    const saving = `${formatBytes(i.totalBytes)} now, about ${formatBytes(Math.max(0, i.totalBytes - i.wastedBytes))} after the fix.`;
+    if (!/^<img\b/i.test(node.snippet)) {
+      elements.push({ node, note: `${saving} ${plain.join(" ")}` });
+      continue;
+    }
+    const tooBig = reasons.some((r) => /larger than it needs to be/i.test(r));
+    const cssW = node.rect?.width ?? 0;
+    const pct = cssW ? Math.max(1, Math.round((cssW / c.viewportWidth) * 100)) : 0;
+    const mediaRule = c.strategy === "mobile" ? `(max-width: 480px) ${pct}vw` : `(min-width: 1024px) ${Math.round(cssW)}px`;
+    const snippet = node.snippet;
+    const truncated = snippet.includes("…");
+    const hasSrcset = /\ssrcset\s*=/i.test(snippet);
+    const nat = c.natural.get(i.url);
+    const need = Math.round(cssW * c.dpr);
+    const widths = (cssW ? [...new Set([ceil10(cssW), ceil10(need), ceil10(cssW * 2), ceil10(cssW * 3)])].filter((w) => !nat || w <= nat[0]).sort((x, y) => x - y) : []).filter(
+      (w, k, all) => k === 0 || w >= all[k - 1] * 1.2,
+    );
+
+    if (tooBig && hasSrcset && cssW) {
+      // The browser already has choices; it picked a big one. Usually sizes is wrong, or no candidate is small enough.
+      const existingSizes = getAttr(snippet, "sizes");
+      const note = `${saving} The image already has a srcset, so the browser can choose a size, but it downloaded a ${nat ? `${nat[0]}px` : "large"}-wide file for a slot ${need}px wide on this ${c.strategy === "mobile" ? "phone" : "screen"}. Either the sizes attribute says the image is shown bigger than it is, or srcset has no version close to ${need}px.`;
+      const extra = resizedUrl(i.url, ceil10(need), cdn);
+      if (!truncated && existingSizes !== undefined) {
+        let fixed = setAttr(snippet, "sizes", `${mediaRule}, ${existingSizes}`);
+        const cands = (getAttr(snippet, "srcset") ?? "").match(/\s(\d+)w/g)?.map((x) => parseInt(x)) ?? [];
+        if (extra && !cands.some((w) => w >= need * 0.8 && w <= need * 1.4)) fixed = setAttr(fixed, "srcset", `${extra} ${ceil10(need)}w, ${getAttr(snippet, "srcset")}`);
+        elements.push({ node, note, current: snippet, fixed: keepLcpFast(fixed, node, c) });
+      } else {
+        elements.push({
+          node,
+          note: `${note} Google shortens long attributes (the "…"), so only the part to change is shown below. Keep everything else as it is.`,
+          current: snippet,
+          change: {
+            label: "Add this rule at the start of the sizes attribute",
+            code: `sizes="${mediaRule}, …your current sizes value…"${extra ? `\n\nAnd make sure srcset includes a ${ceil10(need)}w version, for example:\n${extra} ${ceil10(need)}w` : ""}`,
+          },
+        });
+      }
+      continue;
+    }
+
+    if (!tooBig) {
+      // Only the format or compression is the issue: keep the size, change the file.
+      elements.push({ node, note: `${saving} ${plain.join(" ")}`, current: snippet });
+      continue;
+    }
+
+    // No srcset: offer one.
+    const ext = modern ? format : "avif";
+    const resizable = widths.map((w) => resizedUrl(i.url, w, cdn));
+    const src = getAttr(snippet, "src") ?? codeUrl(i.url, c.origin);
+    let fixed: string;
+    let note = `${saving} ${plain.join(" ")}`;
+    if (widths.length && resizable.every(Boolean)) {
+      fixed = setAttr(snippet, "src", resizable[Math.min(1, resizable.length - 1)]!);
+      fixed = setAttr(fixed, "srcset", widths.map((w, k) => `${resizable[k]} ${w}w`).join(", "));
+      note += ` Your images are served by ${cdn === "shopify" ? "Shopify's" : "an image"} CDN, which resizes them from the URL, so these links work as they are.`;
+    } else {
+      const q = src.indexOf("?");
+      const clean = q > 0 ? src.slice(0, q) : src;
+      const dot = clean.lastIndexOf(".");
+      const stem = dot > clean.lastIndexOf("/") ? clean.slice(0, dot) : clean;
+      fixed = setAttr(snippet, "src", `${stem}-${widths[Math.min(1, widths.length - 1)] ?? 800}.${ext}`);
+      if (widths.length) fixed = setAttr(fixed, "srcset", widths.map((w) => `${stem}-${w}.${ext} ${w}w`).join(", "));
+      note += ` The file names in the fixed code are examples: export the image at ${widths.join(", ")} pixels wide${modern ? "" : " as AVIF (or WebP)"}, upload them, and use their real URLs.`;
+    }
+    if (pct) fixed = setAttr(fixed, "sizes", pct >= 90 ? "100vw" : `${mediaRule}, ${Math.round(cssW)}px`);
+    const [w, h] = nat ?? (node.rect ? [Math.round(node.rect.width), Math.round(node.rect.height)] : [0, 0]);
+    if (w && h && !getAttr(fixed, "width")) fixed = setAttr(setAttr(fixed, "width", String(w)), "height", String(h));
+    elements.push({ node, note, current: snippet, fixed: truncated ? undefined : keepLcpFast(fixed, node, c) });
   }
   const wasted = items.reduce((s, i) => s + (i.wastedBytes ?? 0), 0);
   return base(a, {
-    title: "Serve smaller images in modern formats",
+    title: anyLegacy ? "Serve smaller images in modern formats" : "Serve images at the size they're shown",
     summary: `${items.length} image${items.length > 1 ? "s are" : " is"} heavier than needed. Fixing ${items.length > 1 ? "them" : "it"} saves about ${formatBytes(wasted)}.`,
     why: "Images are usually the heaviest part of a page. On a phone connection a large image can take seconds to download, and if it's the main image that delay is your LCP.",
     metrics: metricsOf(a, ["LCP"]),
@@ -379,9 +481,9 @@ const imageDelivery: Builder = (a, c) => {
     elements,
     resources,
     steps: [
-      "Export each image at the size it's shown (the fixed code below lists the widths to make) and save it as WebP or AVIF.",
-      "Add srcset and sizes so phones download a small version and large screens a bigger one.",
-      "WordPress: an image plugin (ShortPixel, Imagify, EWWW) or your CDN can convert and resize automatically. Next.js: use <Image>, which does this for you.",
+      ...(anyLegacy ? ["Convert JPG and PNG images to AVIF (usually the smallest) or WebP. Both work in every current browser; keep images that are already AVIF or WebP as they are."] : []),
+      "Serve each image at the size it's shown: srcset lists the available widths, and sizes tells the browser how wide the image will be, so a phone picks a small file.",
+      "If your images come from a CDN that resizes by URL (Shopify, Cloudinary, imgix, Next.js <Image>), you don't need new files, just the right widths in the URLs.",
     ],
     owner: "Developer or content editor",
   });

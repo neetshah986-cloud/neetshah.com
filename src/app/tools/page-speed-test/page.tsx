@@ -6,7 +6,7 @@ import { PageSpeed } from "@/components/speed/PageSpeed";
 import { ScoreCalculator } from "@/components/speed/ScoreCalculator";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-21T14:30:00+05:30";
+const UPDATED = "2026-11-21T16:45:00+05:30";
 const URL = `${site.url}/tools/page-speed-test`;
 const TITLE = "Page Speed Test: Core Web Vitals Checker With Fixes";
 
@@ -117,6 +117,74 @@ const ScriptsExample = () => (
             {tp && <span className="ml-2 rounded bg-mist px-1.5 py-0.5 font-sans text-[0.7rem] text-ink-soft">third party</span>}
           </span>
           <span className="shrink-0 font-medium">{ms}</span>
+        </li>
+      ))}
+    </ul>
+  </Panel>
+);
+
+const CompetitorExample = () => (
+  <Panel label="Your page against a competitor, mobile">
+    <div className="grid grid-cols-2 gap-3 text-center">
+      {[
+        ["Your page", "48", "text-fail"],
+        ["competitor.com", "86", "text-warn"],
+      ].map(([who, n, c]) => (
+        <div key={who} className="rounded-lg border border-rule p-3">
+          <p className="truncate text-xs text-ink-soft">{who}</p>
+          <p className={`mt-1 text-3xl font-semibold ${c}`}>{n}</p>
+        </div>
+      ))}
+    </div>
+    <p className="mt-3 text-sm font-medium">Why they&apos;re faster</p>
+    <ul className="mt-1.5 space-y-1.5 text-sm text-ink-soft">
+      <li>Their main image starts downloading 1.4 s sooner</li>
+      <li>Third-party scripts block your page 900 ms longer</li>
+      <li>Your server answers 600 ms slower</li>
+    </ul>
+  </Panel>
+);
+
+const FixCheckExample = () => (
+  <Panel label="Did my fix work? Compared with your last test">
+    <p className="text-sm font-medium text-pass">It worked: the score went from 52 to 78.</p>
+    <ul className="mt-3 space-y-1.5 text-sm">
+      {[
+        ["LCP", "4.6 s", "2.4 s", "−2.2 s"],
+        ["TBT", "740 ms", "310 ms", "−430 ms"],
+        ["CLS", "0.04", "0.04", "Same"],
+      ].map(([k, a, b, d]) => (
+        <li key={k} className="flex items-center justify-between gap-3 rounded bg-mist/60 px-3 py-1.5">
+          <span className="font-medium">{k}</span>
+          <span className="whitespace-nowrap text-ink-soft">
+            {a} to <span className="font-semibold text-ink">{b}</span>{" "}
+            <span className={d === "Same" ? "" : "font-semibold text-pass"}>{d}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+    <p className="mt-3 text-sm text-ink-soft">Fixed since then: 2. Still to fix: 3. New: 0.</p>
+  </Panel>
+);
+
+const ThirdPartyExample = () => (
+  <Panel label="Outside companies' code on the page">
+    <ul className="space-y-2.5 text-sm">
+      {[
+        ["Chat widget", "Chat and support", 78, "+6 pts"],
+        ["Google Tag Manager", "Tag manager", 55, "+4 pts"],
+        ["Session recorder", "Analytics", 34, "+2 pts"],
+      ].map(([n, c, w, g]) => (
+        <li key={n as string}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span>
+              <span className="font-medium">{n}</span> <span className="text-xs text-ink-soft">{c}</span>
+            </span>
+            <span className="text-xs font-semibold text-pass">{g}</span>
+          </div>
+          <span className="mt-1 block h-2 overflow-hidden rounded-full bg-mist">
+            <span className="block h-full rounded-full bg-serp" style={{ width: `${w}%` }} />
+          </span>
         </li>
       ))}
     </ul>
@@ -261,6 +329,33 @@ const features = [
     Example: ScriptsExample,
   },
   {
+    id: "competitor",
+    title: "Compare your page with a competitor's, and see why one is faster",
+    body: [
+      "Add a competitor's URL and both pages are tested on mobile and desktop at once. You get a head-to-head table of real-visitor Core Web Vitals, lab metrics, page weight, JavaScript, render-blocking files and third-party scripts, with small run-to-run differences counted as even.",
+      "Then the reasons, in plain sentences and biggest first: whose server answers faster, whose main image starts downloading sooner, who ships more JavaScript, whose layout jumps. Every point where you're behind links to the fix in your own report, and both pages load side by side in a race video you can download.",
+    ],
+    Example: CompetitorExample,
+  },
+  {
+    id: "fix-check",
+    title: "Check whether a fix worked",
+    body: [
+      "After a developer changes something, click Test again. The tool compares the new result with your earlier tests of the same page and shows the score and each metric before and after, which issues are now fixed, which are still open and anything new, with a small chart of your last few scores.",
+      "Lab results move a little between runs, so small changes are marked as about the same rather than celebrated. Earlier results are saved only in your own browser, never on the server.",
+    ],
+    Example: FixCheckExample,
+  },
+  {
+    id: "third-parties",
+    title: "See what each third-party script costs",
+    body: [
+      "Analytics, tag managers, chat widgets, session recorders, ad and social pixels, video players and font services are grouped by the company behind them. For each one: how long it blocks the page, how much work it makes the browser do, its size, whether it blocks the first paint and whether it loads before your main content.",
+      "Using Lighthouse's own scoring curves, the tool estimates how many points each one costs and what the score could be if the optional ones loaded after the page, then gives company-specific steps and a ready-made script for delaying them.",
+    ],
+    Example: ThirdPartyExample,
+  },
+  {
     id: "field-lab",
     title: "Real-visitor data and the lab test, side by side",
     body: [
@@ -316,6 +411,9 @@ const comparison: { label: string; us: string; psi: string }[] = [
   { label: "Step-by-step fixes for the detected platform and speed plugin", us: "Yes", psi: "Short tips for some platforms" },
   { label: "Raw HTML check for crawlers that don't run JavaScript", us: "Yes", psi: "No" },
   { label: "Copy-ready report for a developer", us: "Yes", psi: "No" },
+  { label: "Compare with a competitor's page, with the reasons one is faster", us: "Yes", psi: "No" },
+  { label: "Before and after check when you test again", us: "Yes", psi: "No" },
+  { label: "Third parties by company, with the score each one costs", us: "Yes", psi: "Lists third parties and their time" },
   { label: "Score calculator with your results and the quickest route to 90", us: "Yes", psi: "Links to Google's calculator, no route to 90" },
 ];
 
@@ -362,7 +460,15 @@ const faqs = [
   },
   {
     q: "Is it free, and are my results stored?",
-    a: "It's free and needs no account. Results are kept in memory for 10 minutes so switching tabs or refreshing doesn't rerun the test, then discarded. Nothing is saved to a database.",
+    a: "It's free and needs no account. Results are kept in memory for 10 minutes so switching tabs or refreshing doesn't rerun the test, then discarded. Nothing is saved to a database. For the before and after check, a short summary of each test (scores, metrics and issue names) is saved in your own browser, and you can clear it at any time.",
+  },
+  {
+    q: "How do I compare my page speed with a competitor's?",
+    a: "Click \"Compare with a competitor\" under the URL box, add their page, and run the test. Compare similar pages, such as your product page against theirs. The head-to-head view shows who's faster on mobile and desktop and why, and the reasons where you're behind link straight to the fixes. You can share the comparison: the link includes both URLs.",
+  },
+  {
+    q: "How do I know if a speed fix worked?",
+    a: "Test the page again after the change is live (clear any page cache first). The report compares it with your earlier tests in this browser and shows each metric before and after. Lab results can move by a few points between runs, so look for clear changes, and remember real-visitor data takes up to 28 days to reflect a fix.",
   },
 ];
 
@@ -483,7 +589,7 @@ export default function PageSpeedTestPage() {
           Test any page on mobile and desktop with Google&apos;s own Lighthouse and real Chrome visitor data. For every slow metric you get the root cause in plain words, the exact element on a snapshot of the page, and the fixed code to hand to your developer.
         </p>
         <ul className="mt-6 flex flex-wrap gap-2 text-sm">
-          {["Lighthouse 13 on Google's servers", "Real-visitor Core Web Vitals", "Mobile and desktop together", "Lighthouse score calculator", "Free, no sign-up"].map((t) => (
+          {["Lighthouse 13 on Google's servers", "Real-visitor Core Web Vitals", "Mobile and desktop together", "Compare with a competitor", "Free, no sign-up"].map((t) => (
             <li key={t} className="rounded-md border border-rule bg-white px-2.5 py-1 text-ink-soft">
               {t}
             </li>

@@ -31,7 +31,7 @@ function loadImg(src: string) {
   });
 }
 
-async function makeLane(run: SpeedRun): Promise<Lane> {
+async function makeLane(run: SpeedRun, label?: string): Promise<Lane> {
   const frames = await Promise.all(run.filmstrip.map(async (f) => ({ t: f.ms, img: await loadImg(f.data) })));
   const final = run.screenshot ? await loadImg(run.screenshot).catch(() => undefined) : undefined;
   const lcp = run.diagnoses.find((d) => d.metric === "LCP")?.node?.rect;
@@ -44,7 +44,7 @@ async function makeLane(run: SpeedRun): Promise<Lane> {
     .slice(0, 3);
   const m = run.waterfall?.marks ?? {};
   const end = Math.max(m.load ?? 0, m.lcp ?? 0, frames.at(-1)?.t ?? 0) + 400;
-  return { run, label: run.strategy === "mobile" ? "Mobile" : "Desktop", frames, final, lcpRect: lcp, shifted, end };
+  return { run, label: label ?? (run.strategy === "mobile" ? "Mobile" : "Desktop"), frames, final, lcpRect: lcp, shifted, end };
 }
 
 function frameAt(l: Lane, t: number): HTMLImageElement | null {
@@ -309,7 +309,10 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
   ctx.font = `500 20px ${FONT}`;
   ctx.fillText("Page Speed Test", 72 + bw + 30, 40);
   ctx.font = `500 15px ${FONT}`;
-  const tested = `${compare ? "Mobile and desktop" : lead.label} test of ${lead.run.finalUrl.replace(/^https?:\/\//, "")}`;
+  const race = compare && lanes[0].run.strategy === lanes[1].run.strategy;
+  const tested = race
+    ? `${lead.run.strategy === "mobile" ? "Mobile" : "Desktop"} race: ${lanes.map((l) => l.label).join(" vs ")}`
+    : `${compare ? "Mobile and desktop" : lead.label} test of ${lead.run.finalUrl.replace(/^https?:\/\//, "")}`;
   const tt = fitText(ctx, tested, 520);
   const tw = ctx.measureText(tt).width;
   ctx.fillStyle = "rgba(255,255,255,0.1)";
@@ -323,15 +326,16 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
   const deviceH = compare ? 520 : 440;
   if (compare) {
     lanes.forEach((l, k) => {
-      const cx = k === 0 ? 200 : 590;
+      const bothDesktop = lanes.every((x) => x.run.strategy === "desktop");
+      const cx = bothDesktop ? (k === 0 ? 212 : 620) : k === 0 ? 200 : 590;
       const isPhone = l.run.strategy === "mobile";
       ctx.fillStyle = C.ink;
       ctx.font = `600 16px ${FONT}`;
       ctx.textAlign = "center";
-      ctx.fillText(`${l.label}`, cx, top + 4);
+      ctx.fillText(fitText(ctx, l.label, 360), cx, top + 4);
       ctx.textAlign = "left";
       if (isPhone) drawPhone(ctx, l, t, cx, top + 18, deviceH, 300);
-      else drawBrowser(ctx, l, t, cx, top + 18 + 80, deviceH - 80, 400);
+      else drawBrowser(ctx, l, t, cx, top + 18 + 80, deviceH - 80, bothDesktop ? 392 : 400);
     });
   } else if (lead.run.strategy === "mobile") drawPhone(ctx, lead, t, areaRight / 2, top, deviceH, 400);
   else drawBrowser(ctx, lead, t, areaRight / 2, top + 6, deviceH, 740);
@@ -563,7 +567,10 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
 
 const SPEEDS = [0.25, 0.5, 1];
 
-export function ReplaySection({ run, other }: { run: SpeedRun; other?: SpeedRun }) {
+const hostOf = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+
+/** `other` is the same page on the other device; `versus` is a competitor's page on the same device. */
+export function ReplaySection({ run, other, versus }: { run: SpeedRun; other?: SpeedRun; versus?: SpeedRun }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [lanes, setLanes] = useState<Lane[] | null>(null);
   const [compare, setCompare] = useState(false);
@@ -575,19 +582,21 @@ export function ReplaySection({ run, other }: { run: SpeedRun; other?: SpeedRun 
   const clock = useRef<{ start: number; from: number } | null>(null);
 
   const runs = useMemo(() => {
+    if (versus) return [run, versus];
     if (compare && other) return run.strategy === "mobile" ? [run, other] : [other, run];
     return [run];
-  }, [compare, other, run]);
+  }, [compare, other, run, versus]);
 
   useEffect(() => {
     let alive = true;
-    Promise.all(runs.map(makeLane)).then((l) => {
+    const label = (r: SpeedRun) => (versus ? hostOf(r.finalUrl) : undefined);
+    Promise.all(runs.map((r) => makeLane(r, label(r)))).then((l) => {
       if (alive) setLanes(l);
     });
     return () => {
       alive = false;
     };
-  }, [runs]);
+  }, [runs, versus]);
 
   const total = lanes ? Math.max(...lanes.map((l) => l.end)) : 1;
 
@@ -624,7 +633,10 @@ export function ReplaySection({ run, other }: { run: SpeedRun; other?: SpeedRun 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, speed, total]);
 
-  const name = `neetshah-page-load-${run.finalUrl.replace(/^https?:\/\/(www\.)?/, "").replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}${compare ? "-compare" : `-${run.strategy}`}`;
+  const slug = (r: SpeedRun, n: number) => hostOf(r.finalUrl).replace(/[^a-z0-9]+/gi, "-").slice(0, n);
+  const name = versus
+    ? `neetshah-page-load-${slug(run, 28)}-vs-${slug(versus, 28)}-${run.strategy}`
+    : `neetshah-page-load-${slug(run, 40)}${compare ? "-compare" : `-${run.strategy}`}`;
 
   function save(blob: Blob, ext: string) {
     const a = document.createElement("a");
@@ -766,7 +778,7 @@ export function ReplaySection({ run, other }: { run: SpeedRun; other?: SpeedRun 
                 </button>
               ) : null,
             )}
-            {other && (
+            {other && !versus && (
               <label className="ml-auto flex items-center gap-2 text-sm font-medium">
                 <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} className="h-4 w-4 accent-ink" />
                 Mobile and desktop side by side

@@ -2,9 +2,10 @@
 import { buildDiagnoses, metricValue } from "./diagnose";
 import { buildFindings, getAttr, passedAudits, toNode, type Audit, type Ctx } from "./fixes";
 import { buildWaterfall } from "./waterfall";
+import { buildThirdParties } from "./thirdparty";
 import { addPlatformSteps, detectPlatform } from "./platform";
 import { rate, type MetricKey } from "./metrics";
-import type { CrawlerView, FieldData, FieldMetric, MetricValue, SpeedRun, Strategy } from "./types";
+import type { CrawlerView, FieldData, FieldMetric, MetricValue, RunFacts, SpeedRun, Strategy } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const CRUX: Record<string, MetricKey> = {
@@ -126,6 +127,32 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
     rawError: raw?.error,
   };
 
+  const summary = new Map<string, number>(((audits["resource-summary"]?.details?.items ?? []) as any[]).map((i) => [String(i.resourceType), i.transferSize ?? 0]));
+  const phaseRows: any[] = (audits["lcp-breakdown-insight"]?.details?.items ?? []).find((i: any) => i.type === "table")?.items ?? [];
+  const phase = (k: string) => phaseRows.find((r) => r.subpart === k)?.duration ?? 0;
+  const blockItems: any[] = audits["render-blocking-insight"]?.details?.items ?? [];
+  const facts: RunFacts = {
+    lcpPhases: phaseRows.length ? { ttfb: phase("timeToFirstByte"), delay: phase("resourceLoadDelay"), download: phase("resourceLoadDuration"), render: phase("elementRenderDelay") } : undefined,
+    lcpIsImage: !!lcpUrl || phaseRows.some((r) => r.subpart === "resourceLoadDuration"),
+    lcpLabel: lcpNode?.label || undefined,
+    renderBlocking: { count: blockItems.length, ms: blockItems.reduce((m, i) => Math.max(m, i.wastedMs ?? 0), 0) },
+    bytes: {
+      total: summary.get("total") ?? crawler.totalBytes,
+      js: summary.get("script") ?? 0,
+      css: summary.get("stylesheet") ?? 0,
+      image: summary.get("image") ?? 0,
+      font: summary.get("font") ?? 0,
+      html: summary.get("document") ?? 0,
+    },
+    requests: requests.length,
+    mainThreadMs: audits["mainthread-work-breakdown"]?.numericValue ?? 0,
+    scriptMs: audits["bootup-time"]?.numericValue ?? 0,
+    domSize: audits["dom-size-insight"]?.details?.debugData?.totalElements ?? audits["dom-size"]?.numericValue,
+    longTasks: (audits["long-tasks"]?.details?.items ?? []).length,
+    origins: new Set(requests.map((r) => { try { return new URL(r.url).origin; } catch { return ""; } }).filter(Boolean)).size,
+    redirects: crawler.redirects,
+  };
+
   return {
     strategy,
     requestedUrl,
@@ -152,6 +179,8 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
       bytes: i.transferSize ?? 0,
       mainThreadMs: i.mainThreadTime ?? 0,
     })),
+    thirdParty: buildThirdParties(lhr, audits, lab, strategy),
+    facts,
     crawler,
     waterfall: buildWaterfall(audits, origin, lcpUrl),
     platform: platform ? { id: platform.id, name: platform.name, extras: platform.extraNames, cloudflare: platform.cloudflare } : null,

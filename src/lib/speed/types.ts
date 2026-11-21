@@ -1,4 +1,5 @@
 import type { MetricKey, Rating } from "./metrics";
+import type { ThirdPartyReport } from "./thirdparty";
 
 export type Strategy = "mobile" | "desktop";
 
@@ -118,10 +119,28 @@ export type SpeedRun = {
   passed: string[];
   weight: { type: string; label: string; requests: number; bytes: number }[];
   thirdParties: { name: string; bytes: number; mainThreadMs: number }[];
+  thirdParty: ThirdPartyReport;
+  /** Plain numbers used to compare two pages and two test runs. */
+  facts: RunFacts;
   crawler: CrawlerView;
   waterfall: Waterfall;
   platform: { id: string; name: string; extras: string[]; cloudflare: boolean } | null;
   warnings: string[];
+};
+
+export type RunFacts = {
+  lcpPhases?: { ttfb: number; delay: number; download: number; render: number };
+  lcpIsImage: boolean;
+  lcpLabel?: string;
+  renderBlocking: { count: number; ms: number };
+  bytes: { total: number; js: number; css: number; image: number; font: number; html: number };
+  requests: number;
+  mainThreadMs: number;
+  scriptMs: number;
+  domSize?: number;
+  longTasks: number;
+  origins: number;
+  redirects: number;
 };
 
 // ---------- request waterfall ----------

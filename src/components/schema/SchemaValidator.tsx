@@ -811,6 +811,7 @@ export function SchemaValidator() {
   const [copied, setCopied] = useState(false);
   const [prev, setPrev] = useState<SchemaSnapshot | null>(null);
   const [waiting, setWaiting] = useState(false);
+  const [lost, setLost] = useState(false);
   const lastRun = useRef<{ mode: "url" | "code" | "rendered"; url?: string; code?: string; title?: string } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -860,9 +861,11 @@ export function SchemaValidator() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get("from") !== "inspector") return;
+    const orphan = !window.opener;
     const t = setTimeout(() => {
-      setWaiting(true);
       setMode("inspector");
+      if (orphan) setLost(true);
+      else setWaiting(true);
     }, 0);
     const onMsg = (e: MessageEvent) => {
       const d = e.data;
@@ -870,7 +873,9 @@ export function SchemaValidator() {
       if (e.source !== window.opener) return;
       (e.source as Window).postMessage({ type: "ns-schema-ack" }, e.origin);
       window.removeEventListener("message", onMsg);
+      clearTimeout(stop);
       setWaiting(false);
+      setLost(false);
       setUrl(d.url);
       const u = new URL(window.location.href);
       u.searchParams.delete("from");
@@ -878,7 +883,10 @@ export function SchemaValidator() {
       run({ mode: "rendered", url: d.url, code: d.html, title: typeof d.title === "string" ? d.title : undefined });
     };
     window.addEventListener("message", onMsg);
-    const stop = setTimeout(() => setWaiting(false), 25000);
+    const stop = setTimeout(() => {
+      setWaiting(false);
+      setLost(true);
+    }, 25000);
     return () => {
       clearTimeout(t);
       clearTimeout(stop);
@@ -949,6 +957,26 @@ export function SchemaValidator() {
               <p role="status" className="mb-4 rounded-lg bg-serp/[0.07] px-4 py-3 font-medium">
                 Waiting for the page from the Schema inspector…
               </p>
+            )}
+            {lost && (
+              <div role="status" className="mb-4 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-[0.95rem] leading-relaxed">
+                <p className="font-medium">This tab didn&apos;t receive the page</p>
+                <p className="mt-1 text-ink-soft">
+                  Some sites keep their tabs isolated from other sites. Go back to the page: the inspector shows a box with a Copy this page button. Copy it, then{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLost(false);
+                      setMode("code");
+                      setTimeout(() => document.getElementById("sv-code")?.focus(), 50);
+                    }}
+                    className="font-medium text-serp hover:underline"
+                  >
+                    paste it into Paste code
+                  </button>
+                  .
+                </p>
+              </div>
             )}
             <InspectorPanel />
           </div>

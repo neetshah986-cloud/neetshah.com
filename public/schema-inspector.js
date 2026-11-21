@@ -33,6 +33,8 @@
   var w = window.open(ORIGIN + "/tools/schema-validator?from=inspector", "_blank");
   if (!w) { fallback("Your browser blocked the new tab. Allow pop-ups for this site and click the bookmark again, or copy the page and paste it into the validator's Paste code tab."); return; }
   var acked = false;
+  // Sites that isolate their tabs (Cross-Origin-Opener-Policy) cut the link to the new tab straight away.
+  setTimeout(function () { if (!acked && w.closed) { clearInterval(t); fallback("This site keeps its tabs isolated, so the page couldn't be sent. Copy it instead and paste it into the validator's Paste code tab."); } }, 1500);
   window.addEventListener("message", function (e) { if (e.origin === ORIGIN && e.data && e.data.type === "ns-schema-ack") acked = true; });
   var tries = 0;
   var t = setInterval(function () {

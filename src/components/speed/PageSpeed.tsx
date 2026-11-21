@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { devReport, findingText } from "@/lib/speed/devreport";
 import { formatBytes, formatMs, formatThreshold, METRICS, RATING_LABEL, thresholds, type MetricKey, type Rating } from "@/lib/speed/metrics";
 import type { CodeBlock, Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Strategy } from "@/lib/speed/types";
+import { ScoreCalculator } from "./ScoreCalculator";
 import { TrendSection } from "./Trend";
 import { WaterfallSection } from "./Waterfall";
 
@@ -690,6 +691,17 @@ function RunView({ run }: { run: SpeedRun }) {
           <Filmstrip run={run} />
         </div>
       </section>
+
+      {run.lab.FCP && run.lab.SI && run.lab.LCP && run.lab.TBT && run.lab.CLS && (
+        <section>
+          <SectionTitle sub="Your lab numbers, loaded into Lighthouse's own scoring formula. Move a slider to see what fixing that metric would do to the score.">What&apos;s each fix worth?</SectionTitle>
+          <ScoreCalculator
+            compact
+            device={run.strategy}
+            initial={{ FCP: run.lab.FCP.value, SI: run.lab.SI.value, LCP: run.lab.LCP.value, TBT: run.lab.TBT.value, CLS: run.lab.CLS.value }}
+          />
+        </section>
+      )}
 
       <section>
         <SectionTitle sub="The main cause behind each metric, worked out from Google's trace of the page load.">Root causes</SectionTitle>

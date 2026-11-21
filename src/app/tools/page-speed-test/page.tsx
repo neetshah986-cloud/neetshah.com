@@ -3,9 +3,10 @@ import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { Byline, LinkedInLink } from "@/components/Person";
 import { PageSpeed } from "@/components/speed/PageSpeed";
+import { ScoreCalculator } from "@/components/speed/ScoreCalculator";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-21T12:45:00+05:30";
+const UPDATED = "2026-11-21T14:30:00+05:30";
 const URL = `${site.url}/tools/page-speed-test`;
 const TITLE = "Page Speed Test: Core Web Vitals Checker With Fixes";
 
@@ -285,6 +286,7 @@ const comparison: { label: string; us: string; psi: string }[] = [
   { label: "Step-by-step fixes for the detected platform and speed plugin", us: "Yes", psi: "Short tips for some platforms" },
   { label: "Raw HTML check for crawlers that don't run JavaScript", us: "Yes", psi: "No" },
   { label: "Copy-ready report for a developer", us: "Yes", psi: "No" },
+  { label: "Score calculator with your results and the quickest route to 90", us: "Yes", psi: "Links to Google's calculator, no route to 90" },
 ];
 
 const steps = [
@@ -299,6 +301,10 @@ const faqs = [
   {
     q: "What is a good page speed score?",
     a: "Google's Core Web Vitals thresholds are what matter: LCP of 2.5 seconds or less, INP of 200 milliseconds or less and CLS of 0.1 or less, measured at the 75th percentile of real visits. The Lighthouse performance score (0 to 100) is a lab summary; 90 or above is good, 50 to 89 needs improvement and below 50 is poor.",
+  },
+  {
+    q: "How is the Lighthouse performance score calculated?",
+    a: "Lighthouse scores five lab metrics on a curve from 0 to 100 and takes a weighted average: Total Blocking Time 30%, Largest Contentful Paint 25%, Cumulative Layout Shift 25%, First Contentful Paint 10% and Speed Index 10%. Each curve is set so a metric at Google's good threshold scores about 90 (for example 2.5 s LCP on mobile). Desktop curves are stricter. The score calculator on this page uses the same curves and weights.",
   },
   {
     q: "Why are the real-visitor results different from the lab test?",
@@ -447,7 +453,7 @@ export default function PageSpeedTestPage() {
           Test any page on mobile and desktop with Google&apos;s own Lighthouse and real Chrome visitor data. For every slow metric you get the root cause in plain words, the exact element on a snapshot of the page, and the fixed code to hand to your developer.
         </p>
         <ul className="mt-6 flex flex-wrap gap-2 text-sm">
-          {["Lighthouse 13 on Google's servers", "Real-visitor Core Web Vitals", "Mobile and desktop together", "Free, no sign-up"].map((t) => (
+          {["Lighthouse 13 on Google's servers", "Real-visitor Core Web Vitals", "Mobile and desktop together", "Lighthouse score calculator", "Free, no sign-up"].map((t) => (
             <li key={t} className="rounded-md border border-rule bg-white px-2.5 py-1 text-ink-soft">
               {t}
             </li>
@@ -492,6 +498,16 @@ export default function PageSpeedTestPage() {
           </table>
         </div>
         <p className="mt-3 text-sm text-ink-soft">Source: web.dev, Google&apos;s guidance on Web Vitals. Total Blocking Time bands are Lighthouse&apos;s mobile scoring bands.</p>
+      </section>
+
+      <section id="score-calculator" aria-labelledby="calc-heading" className="container-x mt-32">
+        <h2 id="calc-heading" className="text-3xl font-semibold tracking-tight sm:text-4xl">Lighthouse score calculator</h2>
+        <p className="mt-4 max-w-3xl leading-relaxed text-ink-soft">
+          See exactly how Lighthouse turns five lab metrics into the 0 to 100 performance score, and what it would take to reach 90. Type your numbers or drag the sliders: the calculator uses Lighthouse&apos;s own scoring curves and weights, so it gives the same score as a real report.
+        </p>
+        <div className="mt-8">
+          <ScoreCalculator />
+        </div>
       </section>
 
       <section aria-labelledby="features-heading" className="container-x mt-32">

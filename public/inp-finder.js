@@ -8,6 +8,20 @@
   var items = new Map();
   var loafs = [];
   var els = new Map();
+  /* Clicking a link loads a new page, which ends any script, bookmarklets included. Results are kept in
+     this tab's sessionStorage, so running the finder again on the next page continues the list. */
+  var KEY = "__nsInpFinder";
+  var page = location.pathname + location.search;
+  var loadId = String(performance.timeOrigin);
+  var earlier = [];
+  try { earlier = (JSON.parse(sessionStorage.getItem(KEY) || "{}").items || []).filter(function (x) { return x.loadId !== loadId; }); } catch (e) { earlier = []; }
+  function save() {
+    try {
+      var mine = Array.from(items.values()).map(function (it) { var c = Object.assign({}, it, { page: page, loadId: loadId }); c.scripts = scriptsFor(it.start, it.start + it.duration); return c; });
+      sessionStorage.setItem(KEY, JSON.stringify({ items: earlier.concat(mine).slice(-60) }));
+    } catch (e) { /* storage blocked: results last for this page only */ }
+  }
+  addEventListener("pagehide", save);
 
   function selector(el) {
     if (!el || el.nodeType !== 1) return "(element removed)";
@@ -49,8 +63,8 @@
 
   function list() {
     var arr = Array.from(items.values());
-    arr.forEach(function (it) { it.scripts = scriptsFor(it.start, it.start + it.duration); });
-    return arr.sort(function (a, b) { return b.duration - a.duration; });
+    arr.forEach(function (it) { it.scripts = scriptsFor(it.start, it.start + it.duration); it.page = page; });
+    return arr.concat(earlier).sort(function (a, b) { return b.duration - a.duration; });
   }
   function inp(arr) {
     if (!arr.length) return 0;
@@ -129,16 +143,19 @@
   function short(u) { try { var x = new URL(u); return (x.host === location.host ? "" : x.host) + x.pathname.split("/").slice(-2).join("/"); } catch (e) { return u; } }
 
   function render() {
+    save();
     var arr = list();
     var v = inp(arr);
     sum.innerHTML = arr.length
       ? "<div class='r'><div>Estimated INP for this visit</div><div class='big' style='color:" + COLOR[rating(v)] + "'>" + v + " ms</div></div><div style='color:#4A5A70'>" + arr.length + " interaction" + (arr.length === 1 ? "" : "s") + " recorded. Good is 200 ms or less." + (hasLoaf ? "" : " Script names need Chrome 123 or newer.") + "</div>"
       : "<div><b>Now use the page.</b> Tap buttons, open menus, add to cart, type in search. Each interaction appears here with what slowed it down.</div><div style='color:#4A5A70;margin-top:4px'>Tip: in DevTools, Performance, set CPU to 4x slowdown to feel what a mid-range phone feels.</div>";
+    sum.innerHTML += "<div style='color:#4A5A70;margin-top:6px;font-size:12px'>" + (earlier.length ? "Includes " + earlier.length + " from earlier pages in this tab. " : "") + "Clicking a link opens a new page and closes this panel: click the bookmark again there and your results carry on.</div>";
     box.innerHTML = arr.slice(0, 25).map(function (it) {
       var tot = Math.max(1, it.inputDelay + it.processing + it.presentation);
       var sc = it.scripts[0];
-      return "<div class='i' data-id='" + it.id + "'><div class='r'><div class='t'>" + esc(it.type) + " on " + esc(it.target) + "</div><b style='color:" + COLOR[rating(it.duration)] + "'>" + it.duration + " ms</b></div>" +
-        (it.text ? "<div class='sc'>“" + esc(it.text) + "”</div>" : "") +
+      var other = it.page && it.page !== page;
+      return "<div class='i' data-id='" + (other ? "" : it.id) + "'><div class='r'><div class='t'>" + esc(it.type) + " on " + esc(it.target) + "</div><b style='color:" + COLOR[rating(it.duration)] + "'>" + it.duration + " ms</b></div>" +
+        (it.text || other ? "<div class='sc'>" + (it.text ? "“" + esc(it.text) + "”" : "") + (other ? (it.text ? ", " : "") + "on " + esc(it.page) : "") + "</div>" : "") +
         "<div class='bar'><span style='width:" + (it.inputDelay / tot * 100) + "%;background:#B86E00'></span><span style='width:" + (it.processing / tot * 100) + "%;background:#1A3FD6'></span><span style='width:" + (it.presentation / tot * 100) + "%;background:#0B8A57'></span></div>" +
         "<div class='k'><span><i class='d' style='background:#B86E00'></i>wait " + it.inputDelay + "</span><span><i class='d' style='background:#1A3FD6'></i>code " + it.processing + "</span><span><i class='d' style='background:#0B8A57'></i>draw " + it.presentation + "</span></div>" +
         (sc ? "<div class='sc'>Slowest script: " + esc(short(sc.url)) + (sc.fn ? " (" + esc(sc.fn) + ")" : "") + ", " + sc.ms + " ms</div>" : "") +
@@ -154,10 +171,10 @@
   });
   box.addEventListener("mouseleave", function () { outline.style.display = "none"; });
   root.querySelector(".x").onclick = function () { host.style.display = "none"; outline.style.display = "none"; };
-  root.querySelector(".z").onclick = function () { items.clear(); els.clear(); render(); };
+  root.querySelector(".z").onclick = function () { items.clear(); els.clear(); earlier = []; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } render(); };
   root.querySelector(".c").onclick = function () {
     var arr = list();
-    var out = JSON.stringify({ tool: "neetshah-inp-finder", version: 1, url: location.href, when: new Date().toISOString(), ua: navigator.userAgent, inp: inp(arr), interactions: arr.slice(0, 30).map(function (it) { var c = Object.assign({}, it); delete c.id; return c; }) });
+    var out = JSON.stringify({ tool: "neetshah-inp-finder", version: 1, url: location.href, when: new Date().toISOString(), ua: navigator.userAgent, inp: inp(arr), interactions: arr.slice(0, 30).map(function (it) { var c = Object.assign({}, it); delete c.id; delete c.loadId; return c; }) });
     var btn = this;
     var done = function () { btn.textContent = "Copied. Paste it in the tool"; setTimeout(function () { btn.textContent = "Copy results"; }, 2500); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(out).then(done, function () { prompt("Copy these results:", out); });

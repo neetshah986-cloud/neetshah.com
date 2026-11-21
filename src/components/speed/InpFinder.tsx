@@ -129,6 +129,7 @@ export function InpFinder({ run }: { run?: SpeedRun }) {
         <li className="rounded-xl border border-rule bg-white p-5">
           <p className="font-semibold">2. Use the page like a visitor</p>
           <p className="mt-2 text-[0.93rem] leading-relaxed text-ink-soft">Open the menu, use filters, add to cart, type in search, open a product gallery. A panel in the corner lists each interaction with its time.</p>
+          <p className="mt-2 text-[0.93rem] leading-relaxed text-ink-soft">Clicking a link opens a new page, which closes the panel. Click the bookmark again on the new page: results from earlier pages in the same tab are kept.</p>
           <p className="mt-2 text-[0.93rem] leading-relaxed text-ink-soft">To feel what a mid-range phone feels, open DevTools, Performance, and set CPU to 4x slowdown before you start.</p>
         </li>
         <li className="rounded-xl border border-rule bg-white p-5">
@@ -250,7 +251,12 @@ export function InpFinder({ run }: { run?: SpeedRun }) {
                         <span className="block truncate font-mono text-[0.8rem]" title={it.target}>
                           {it.type} on {it.target}
                         </span>
-                        {it.text && <span className="block truncate text-xs text-ink-soft">“{it.text}”</span>}
+                        {(it.text || it.page) && (
+                          <span className="block truncate text-xs text-ink-soft">
+                            {it.text ? `“${it.text}”` : ""}
+                            {it.page && it.page !== "/" ? `${it.text ? ", " : ""}on ${it.page}` : ""}
+                          </span>
+                        )}
                       </td>
                       <td className={`px-3 py-2.5 font-semibold ${RATING_TEXT[inpRating(it.duration)]}`}>{it.duration} ms</td>
                       <td className="px-3 py-2.5">{it.inputDelay} ms</td>

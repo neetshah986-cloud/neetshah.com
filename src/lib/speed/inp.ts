@@ -12,6 +12,8 @@ export type InpInteraction = {
   processing: number;
   presentation: number;
   scripts: InpScript[];
+  /** The page it happened on, when results span several pages. */
+  page?: string;
 };
 export type InpResults = { url: string; when: string; ua: string; inp: number; interactions: InpInteraction[] };
 

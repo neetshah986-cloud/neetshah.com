@@ -378,11 +378,13 @@ const imageDelivery: Builder = (a, c) => {
   const elements: FindingElement[] = [];
   const resources: FindingResource[] = [];
   let anyLegacy = false;
+  let anyTooBig = false;
   for (const i of items) {
     const node = toNode(i.node);
     const format = imageFormat(i.url);
     const modern = format === "avif" || format === "webp";
-    if (!modern && format !== "svg") anyLegacy = true;
+    const flaggedFormat = (i.subItems?.items ?? []).some((x: any) => /modern image format/i.test(String(x.reason ?? "")));
+    if (!modern && format !== "svg" && flaggedFormat) anyLegacy = true;
     const cdn = imageCdn(i.url);
     const reasons: string[] = (i.subItems?.items ?? []).map((s: any) => String(s.reason ?? "")).filter(Boolean);
     const plain = reasons.map((r) =>
@@ -404,6 +406,7 @@ const imageDelivery: Builder = (a, c) => {
       continue;
     }
     const tooBig = reasons.some((r) => /larger than it needs to be/i.test(r));
+    if (tooBig) anyTooBig = true;
     const cssW = node.rect?.width ?? 0;
     const pct = cssW ? Math.max(1, Math.round((cssW / c.viewportWidth) * 100)) : 0;
     const mediaRule = c.strategy === "mobile" ? `(max-width: 480px) ${pct}vw` : `(min-width: 1024px) ${Math.round(cssW)}px`;
@@ -447,7 +450,9 @@ const imageDelivery: Builder = (a, c) => {
     }
 
     // No srcset: offer one.
-    const ext = modern ? format : "avif";
+    const origExt = (getAttr(snippet, "src") ?? i.url).split("?")[0].match(/\.([a-z0-9]{3,4})$/i)?.[1]?.toLowerCase();
+    const convert = !modern && flaggedFormat;
+    const ext = convert ? "avif" : (origExt ?? (format === "other" ? "jpg" : format));
     const resizable = widths.map((w) => resizedUrl(i.url, w, cdn));
     const src = getAttr(snippet, "src") ?? codeUrl(i.url, c.origin);
     let fixed: string;
@@ -463,7 +468,7 @@ const imageDelivery: Builder = (a, c) => {
       const stem = dot > clean.lastIndexOf("/") ? clean.slice(0, dot) : clean;
       fixed = setAttr(snippet, "src", `${stem}-${widths[Math.min(1, widths.length - 1)] ?? 800}.${ext}`);
       if (widths.length) fixed = setAttr(fixed, "srcset", widths.map((w) => `${stem}-${w}.${ext} ${w}w`).join(", "));
-      note += ` The file names in the fixed code are examples: export the image at ${widths.join(", ")} pixels wide${modern ? "" : " as AVIF (or WebP)"}, upload them, and use their real URLs.`;
+      note += ` The file names in the fixed code are examples: export the image at ${widths.join(", ")} pixels wide${convert ? " as AVIF (or WebP)" : ""}, upload them, and use their real URLs.`;
     }
     if (pct) fixed = setAttr(fixed, "sizes", pct >= 90 ? "100vw" : `${mediaRule}, ${Math.round(cssW)}px`);
     const [w, h] = nat ?? (node.rect ? [Math.round(node.rect.width), Math.round(node.rect.height)] : [0, 0]);
@@ -472,7 +477,7 @@ const imageDelivery: Builder = (a, c) => {
   }
   const wasted = items.reduce((s, i) => s + (i.wastedBytes ?? 0), 0);
   return base(a, {
-    title: anyLegacy ? "Serve smaller images in modern formats" : "Serve images at the size they're shown",
+    title: anyTooBig ? (anyLegacy ? "Serve smaller images in modern formats" : "Serve images at the size they're shown") : anyLegacy ? "Use modern image formats" : "Compress your images a little more",
     summary: `${items.length} image${items.length > 1 ? "s are" : " is"} heavier than needed. Fixing ${items.length > 1 ? "them" : "it"} saves about ${formatBytes(wasted)}.`,
     why: "Images are usually the heaviest part of a page. On a phone connection a large image can take seconds to download, and if it's the main image that delay is your LCP.",
     metrics: metricsOf(a, ["LCP"]),
@@ -482,7 +487,8 @@ const imageDelivery: Builder = (a, c) => {
     resources,
     steps: [
       ...(anyLegacy ? ["Convert JPG and PNG images to AVIF (usually the smallest) or WebP. Both work in every current browser; keep images that are already AVIF or WebP as they are."] : []),
-      "Serve each image at the size it's shown: srcset lists the available widths, and sizes tells the browser how wide the image will be, so a phone picks a small file.",
+      ...(!anyTooBig && !anyLegacy ? ["Re-export the original images at a slightly lower quality (around 75 to 80%) and upload them again. The difference is rarely visible, and the files get noticeably smaller."] : []),
+      ...(anyTooBig ? ["Serve each image at the size it's shown: srcset lists the available widths, and sizes tells the browser how wide the image will be, so a phone picks a small file."] : []),
       "If your images come from a CDN that resizes by URL (Shopify, Cloudinary, imgix, Next.js <Image>), you don't need new files, just the right widths in the URLs.",
     ],
     owner: "Developer or content editor",

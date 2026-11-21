@@ -289,11 +289,10 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
   ctx.font = `700 11px ${FONT}`;
   ctx.textAlign = "center";
   // Markers; ones that land within a few pixels share a label ("FCP + LCP").
-  const marks = ([
-    ["FCP", m0.fcp, C.serp],
-    ["LCP", m0.lcp, C.fail],
-    ["Load", m0.load, C.soft],
-  ] as const).filter((x): x is readonly [string, number, string] => typeof x[1] === "number");
+  const marks: [string, number, string][] = [];
+  if (typeof m0.fcp === "number") marks.push(["FCP", m0.fcp, C.serp]);
+  if (typeof m0.lcp === "number") marks.push(["LCP", m0.lcp, C.fail]);
+  if (typeof m0.load === "number") marks.push(["Load", m0.load, C.soft]);
   const groups: { x: number; label: string; color: string }[] = [];
   for (const [k, v, col] of marks) {
     const mx = tx + (v / total) * tw;

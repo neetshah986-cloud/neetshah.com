@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatBytes, formatMs } from "@/lib/speed/metrics";
 import type { Rect, SpeedRun } from "@/lib/speed/types";
+import { hostOf } from "@/lib/speed/compare";
 
 // A load replay drawn on a canvas from Google's test snapshots, with the timing, captions and
 // overlays burned in, so the on-screen preview and the exported video are the same thing.
@@ -567,7 +568,6 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
 
 const SPEEDS = [0.25, 0.5, 1];
 
-const hostOf = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
 
 /** `other` is the same page on the other device; `versus` is a competitor's page on the same device. */
 export function ReplaySection({ run, other, versus }: { run: SpeedRun; other?: SpeedRun; versus?: SpeedRun }) {

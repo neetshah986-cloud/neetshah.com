@@ -37,7 +37,14 @@ export type Versus = {
   thirdParties: { onlyYou: string[]; onlyThem: string[]; both: string[] };
 };
 
-export const hostOf = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+/** The site's name for labels: the host without "www." (no path, query string or tracking IDs). */
+export const hostOf = (u: string) => {
+  try {
+    return new URL(u).host.replace(/^www\./, "");
+  } catch {
+    return u.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0];
+  }
+};
 
 const s = (ms: number) => formatMs(Math.abs(ms));
 /** Capitalise a sentence, but never a domain name. */

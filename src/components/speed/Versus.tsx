@@ -164,8 +164,8 @@ export function VersusSection({ you, them, onFix }: { you: SpeedRun; them: Speed
                 [`Only on ${other}`, v.thirdParties.onlyThem],
               ] as const
             ).map(([title, list]) => (
-              <div key={title} className="rounded-xl border border-rule bg-white p-4">
-                <p className="font-medium">
+              <div key={title} className="min-w-0 rounded-xl border border-rule bg-white p-4">
+                <p className="font-medium [overflow-wrap:anywhere]">
                   {title} ({list.length})
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-1.5">

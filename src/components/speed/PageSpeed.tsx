@@ -587,6 +587,28 @@ export function RunView({ run, other, view, setView, earlier, onRetest, onForget
     return new Set([...run.findings.slice(0, 2).map((f) => f.id), ...(focused ? [focused.id] : [])]);
   });
   const barRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // How many tabs are hidden off each edge of the bar, so the arrows can say "4 more".
+  const [hidden, setHidden] = useState({ left: 0, right: 0 });
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const measure = () => {
+      const box = el.getBoundingClientRect();
+      const tabsEls = Array.from(el.children) as HTMLElement[];
+      const left = tabsEls.filter((t) => t.getBoundingClientRect().left < box.left - 4).length;
+      const right = tabsEls.filter((t) => t.getBoundingClientRect().right > box.right + 4).length;
+      setHidden((h) => (h.left === left && h.right === right ? h : { left, right }));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.addEventListener("scroll", measure, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", measure);
+    };
+  }, []);
+  const scrollTabs = (dir: 1 | -1) => listRef.current?.scrollBy({ left: dir * listRef.current.clientWidth * 0.7 });
   // Keep the active tab visible in the bar on narrow screens.
   useEffect(() => {
     const btn = document.getElementById(`rt-${run.strategy}-${view}`);
@@ -693,7 +715,28 @@ export function RunView({ run, other, view, setView, earlier, onRetest, onForget
 
       {/* Tabs */}
       <div ref={barRef} className="sticky top-16 z-30 -mx-4 border-b border-rule bg-paper/95 px-4 backdrop-blur-md sm:mx-0 sm:px-0">
+        <div className="relative">
+        {hidden.left > 0 && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-paper via-paper/95 to-transparent pr-8">
+            <button type="button" onClick={() => scrollTabs(-1)} aria-label={`Show ${hidden.left} earlier section${hidden.left === 1 ? "" : "s"}`} className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-rule bg-white text-ink shadow-sm hover:border-ink-soft">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden>
+                <path d="M12.5 5l-5 5 5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
+        {hidden.right > 0 && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-paper via-paper/95 to-transparent pl-10">
+            <button type="button" onClick={() => scrollTabs(1)} aria-label={`Show ${hidden.right} more section${hidden.right === 1 ? "" : "s"}`} className="pointer-events-auto flex items-center gap-1 rounded-full bg-ink py-1.5 pr-2 pl-3 text-xs font-semibold text-paper shadow-sm transition-colors hover:bg-serp">
+              {hidden.right} more
+              <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden>
+                <path d="M7.5 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         <div
+          ref={listRef}
           role="tablist"
           aria-label="Result sections"
           className="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -727,6 +770,7 @@ export function RunView({ run, other, view, setView, earlier, onRetest, onForget
               </button>
             );
           })}
+        </div>
         </div>
       </div>
 

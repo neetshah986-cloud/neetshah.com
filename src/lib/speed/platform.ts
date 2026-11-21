@@ -255,6 +255,8 @@ const SHOPIFY: Record<string, StepFn> = {
   "document-latency-insight": () => ["Shopify runs the server, so you can't change hosting. Slow responses usually come from heavy Liquid code: too many products or collections per page, nested loops, or apps that hook into the page.", "Use Shopify Theme Inspector for Chrome to find the slow Liquid parts."],
   "cache-insight": () => ["Shopify caches its own files. The ones listed are usually from apps or other domains, which only the app makers can change."],
   "dom-size-insight": () => ["Reduce the number of products shown per collection page, and remove sections hidden on mobile."],
+  "unused-javascript": () => ["Most unused JavaScript on Shopify comes from apps loading on every page. Remove apps you don't use and turn off their App embeds (Online Store → Themes → Customize → App embeds).", "Ask app makers whether their script can load only on the pages that need it (for example, reviews only on product pages)."],
+  "unused-css-rules": () => ["Themes and apps ship CSS for every section. Remove unused sections and apps; a lighter, Online Store 2.0 theme such as Dawn loads much less CSS."],
 };
 
 const NEXT: Record<string, StepFn> = {

@@ -964,10 +964,12 @@ function Failed({ text }: { text: string }) {
   );
 }
 
-export function PageSpeed() {
+/** `compare` shows the competitor box; the Compare tab above the tool controls it through `onCompare`. */
+export function PageSpeed({ compare = false, onCompare }: { compare?: boolean; onCompare?: (on: boolean) => void } = {}) {
   const [url, setUrl] = useState("");
   const [compUrl, setCompUrl] = useState("");
-  const [withComp, setWithComp] = useState(false);
+  const withComp = compare;
+  const setWithComp = (on: boolean) => onCompare?.(on);
   const [tab, setTab] = useState<Strategy>("mobile");
   const [view, setView] = useState<ResultTab>("overview");
   const [mode, setMode] = useState<Mode>("you");
@@ -1040,7 +1042,8 @@ export function PageSpeed() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const shared = q.get("url");
-    if (!shared || q.get("mode")) return;
+    const m = q.get("mode");
+    if (!shared || (m && m !== "compare")) return;
     const vs = q.get("vs") ?? "";
     const t = setTimeout(() => {
       setUrl(shared);

@@ -308,7 +308,7 @@ function DiagnosisCard({ d, run, findings, onOpen }: { d: Diagnosis; run: SpeedR
   const tone = TONE[d.rating];
   const linked = d.findingIds.map((id) => findings.find((f) => f.auditId === id)).filter(Boolean) as Finding[];
   return (
-    <li id={`cause-${run.strategy}-${d.metric}`} className="scroll-mt-24 rounded-xl border border-rule bg-white p-5 @container">
+    <li id={`cause-${run.strategy}-${d.metric}`} className="min-w-0 scroll-mt-24 rounded-xl border border-rule bg-white p-5 [overflow-wrap:anywhere] @container">
       <div className="flex flex-wrap items-center gap-2">
         <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${tone.bg} ${tone.text}`}>
           {d.metric} {d.value}
@@ -398,7 +398,7 @@ const IMPACT: Record<Finding["impact"], { label: string; cls: string }> = {
 function FindingCard({ f, run, open, onToggle, n }: { f: Finding; run: SpeedRun; open: boolean; onToggle: (o: boolean) => void; n: number }) {
   const saves = [f.savingsMs ? `saves about ${formatMs(f.savingsMs)}` : "", f.savingsBytes ? `${formatBytes(f.savingsBytes)} lighter` : ""].filter(Boolean).join(", ");
   return (
-    <li id={`fix-${run.strategy}-${f.id}`} className="scroll-mt-24 overflow-hidden rounded-xl border border-rule bg-white @container">
+    <li id={`fix-${run.strategy}-${f.id}`} className="min-w-0 scroll-mt-24 overflow-hidden rounded-xl border border-rule bg-white [overflow-wrap:anywhere] @container">
       <details open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
         <summary className="flex cursor-pointer list-none items-start gap-4 px-5 py-4 hover:bg-mist/40 [&::-webkit-details-marker]:hidden">
           <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold">{n}</span>

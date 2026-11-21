@@ -79,7 +79,7 @@ export function WaterfallSection({ wf }: { wf: W }) {
           {wf.insights.map((i) => {
             const active = focus?.id === i.id;
             return (
-              <li key={i.id} className={`flex gap-3 rounded-xl border bg-white p-4 ${active ? "border-serp ring-1 ring-serp" : "border-rule"}`}>
+              <li key={i.id} className={`flex min-w-0 gap-3 rounded-xl border bg-white p-4 [overflow-wrap:anywhere] ${active ? "border-serp ring-1 ring-serp" : "border-rule"}`}>
                 <ToneIcon tone={i.tone} className="mt-0.5 h-4 w-4" />
                 <div className="min-w-0">
                   <p className="font-semibold leading-snug">{i.title}</p>

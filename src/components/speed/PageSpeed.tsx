@@ -6,7 +6,7 @@ import { formatBytes, formatMs, formatThreshold, METRICS, RATING_LABEL, threshol
 import type { CodeBlock, Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Strategy } from "@/lib/speed/types";
 import { ReplaySection } from "./Replay";
 import { ScoreCalculator } from "./ScoreCalculator";
-import { TrendSection } from "./Trend";
+import { prefetchTrend, TrendSection } from "./Trend";
 import { WaterfallSection } from "./Waterfall";
 
 // ---------- small pieces ----------
@@ -953,6 +953,7 @@ export function PageSpeed() {
         if (poll.run) data = { run: poll.run };
       }
       if (!data.run) throw new Error("The test didn't return a result. Try again.");
+      prefetchTrend(data.run.finalUrl, strategy);
       setState((s) => ({ ...s, [strategy]: { loading: false, run: data.run } }));
     } catch (e) {
       setState((s) => ({ ...s, [strategy]: { loading: false, error: e instanceof Error ? e.message : "The test failed. Try again." } }));

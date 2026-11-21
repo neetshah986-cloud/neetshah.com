@@ -138,20 +138,40 @@ function TrendChart({ m, ends, strategy }: { m: TrendMetric; ends: string[]; str
   );
 }
 
+type TrendState = { loading: boolean; trend?: Trend | null; error?: string };
+
+// The trend is fetched in the background as soon as a test finishes, and kept
+// for the rest of the visit, so opening the tab shows it straight away.
+const trendCache = new Map<string, { done?: TrendState; promise: Promise<TrendState> }>();
+
+export function prefetchTrend(url: string, strategy: Strategy): Promise<TrendState> {
+  const key = `${strategy}|${url}`;
+  const hit = trendCache.get(key);
+  if (hit) return hit.promise;
+  const entry: { done?: TrendState; promise: Promise<TrendState> } = { promise: Promise.resolve({ loading: true }) };
+  entry.promise = fetch("/api/page-speed/trend", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, strategy }) })
+    .then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      return r.ok ? { loading: false, trend: d.trend ?? null } : { loading: false, error: d.error ?? "Couldn't load the history." };
+    })
+    .catch(() => ({ loading: false, error: "Couldn't load the history." }))
+    .then((st: TrendState) => {
+      if (st.error) trendCache.delete(key);
+      else entry.done = st;
+      return st;
+    });
+  trendCache.set(key, entry);
+  return entry.promise;
+}
+
 export function TrendSection({ url, strategy }: { url: string; strategy: Strategy }) {
-  const [state, setState] = useState<{ loading: boolean; trend?: Trend | null; error?: string }>({ loading: true });
+  const cached = trendCache.get(`${strategy}|${url}`)?.done;
+  const [state, setState] = useState<TrendState>(cached ?? { loading: true });
   const [more, setMore] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/page-speed/trend", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url, strategy }) })
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}));
-        if (!alive) return;
-        if (!r.ok) setState({ loading: false, error: d.error ?? "Couldn't load the history." });
-        else setState({ loading: false, trend: d.trend ?? null });
-      })
-      .catch(() => alive && setState({ loading: false, error: "Couldn't load the history." }));
+    prefetchTrend(url, strategy).then((st) => alive && setState(st));
     return () => {
       alive = false;
     };

@@ -215,7 +215,7 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
   const tTbt = them.lab.TBT?.value;
   if (yTbt !== undefined && tTbt !== undefined)
     add(yTbt - tTbt, 150, 300, (side) => ({
-      title: `${worse(side)} freezes the page for ${s(yTbt - tTbt)} longer`,
+      title: `JavaScript keeps ${worse(side)} busy for ${s(yTbt - tTbt)} longer`,
       detail: `Total Blocking Time is ${formatMs(side === "you" ? tTbt : yTbt)} against ${formatMs(side === "you" ? yTbt : tTbt)}. While the browser is busy running JavaScript, taps and clicks wait, which hurts INP.`,
       fix: "Delay non-essential scripts until after load and break up long JavaScript tasks.",
       auditIds: ["bootup-time", "third-parties-insight", "unused-javascript"],

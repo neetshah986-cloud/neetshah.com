@@ -177,7 +177,28 @@ export function buildThirdParties(lhr: any, audits: Record<string, any>, lab: Pa
     const mainThreadMs = (i.mainThreadTime ?? 0) * cpu;
     const bytes = i.transferSize ?? 0;
     const cost: ThirdPartyCost = renderBlocking || blockingMs >= 100 || mainThreadMs >= 250 ? "high" : blockingMs >= 30 || mainThreadMs >= 80 || bytes >= 100_000 ? "medium" : "low";
-    const advice = KNOWN.find(([re]) => re.test(name))?.[1] ?? BY_CATEGORY[category] ?? BY_CATEGORY.other;
+    let advice = KNOWN.find(([re]) => re.test(name))?.[1] ?? BY_CATEGORY[category] ?? BY_CATEGORY.other;
+    // The same script loaded several times (for example one gtag.js per Google tag ID).
+    const paths = new Map<string, number>();
+    for (const f of files) {
+      try {
+        const u = new URL(f.url);
+        const k = u.host + u.pathname;
+        paths.set(k, (paths.get(k) ?? 0) + 1);
+      } catch {
+        /* not a URL */
+      }
+    }
+    const dup = [...paths.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1])[0];
+    if (dup) {
+      const isGtag = /googletagmanager\.com\/gtag\/js/.test(dup[0]);
+      advice = [
+        isGtag
+          ? `gtag.js is loaded ${dup[1]} times, once for each Google tag ID (Analytics, Ads, Merchant Center). Load it once and add the other IDs with gtag('config', ...), or move them all into one Google Tag Manager container.`
+          : `${dup[0]} is loaded ${dup[1]} times. Load it once and reuse it.`,
+        ...advice,
+      ];
+    }
     return {
       name,
       category,

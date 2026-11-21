@@ -71,7 +71,7 @@ function Row({ t, max, open, onToggle }: { t: ThirdParty; max: number; open: boo
         <span className="flex items-center gap-3 sm:justify-end">
           {t.scoreGain > 0 && (
             <span className="rounded-md bg-pass/10 px-2 py-1 text-sm font-semibold text-pass" title="Estimated gain if it loaded after the page">
-              +{t.scoreGain} pts
+              +{t.scoreGain} {t.scoreGain === 1 ? "pt" : "pts"}
             </span>
           )}
           <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-ink-soft transition-transform ${open ? "rotate-180" : ""}`} aria-hidden>

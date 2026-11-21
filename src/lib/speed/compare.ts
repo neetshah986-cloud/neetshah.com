@@ -15,6 +15,8 @@ export type VersusRow = {
 };
 
 export type Reason = {
+  /** Internal: which part of LCP this explains, so it isn't repeated. */
+  phase?: "delay" | "download" | "render" | "lcp";
   /** Who is better on this point. */
   side: "you" | "them";
   title: string;
@@ -143,6 +145,7 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
       const loser = side === "them" ? you : them;
       const why = loser.diagnoses.find((d) => d.metric === "LCP")?.headline;
       return {
+        phase: "lcp",
         title: `${worse(side)}'s main content appears ${s(yLcp - tLcp)} later`,
         detail: `Largest Contentful Paint is ${formatMs(side === "you" ? tLcp : yLcp)} against ${formatMs(side === "you" ? yLcp : tLcp)}.${why ? ` On ${worse(side)}: ${why.charAt(0).toLowerCase() + why.slice(1)}` : ""}`,
         fix: "Open Root causes for the LCP breakdown, then the matching fixes.",
@@ -163,12 +166,14 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
   if (py && pt) {
     if (fy.lcpIsImage && ft.lcpIsImage) {
       add(py.delay - pt.delay, 300, 500, (side) => ({
+        phase: "delay",
         title: `${better(side)}'s main image starts downloading ${s(py.delay - pt.delay)} sooner`,
         detail: `${worse(side)} finds its main image late (lazy-loading, a CSS background, or added by JavaScript), so the download starts late even if the file is small.`,
         fix: 'Put the main image in the HTML as an <img> with fetchpriority="high", remove loading="lazy" from it, and preload it if it\'s a CSS background.',
         auditIds: ["lcp-discovery-insight", "lcp-breakdown-insight"],
       }));
       add(py.download - pt.download, 300, 500, (side) => ({
+        phase: "download",
         title: `${better(side)}'s main image downloads ${s(py.download - pt.download)} faster`,
         detail: `${worse(side)}'s main image file is heavier or comes from a slower server.`,
         fix: "Serve the main image at the size it's shown, in AVIF or WebP, from a CDN.",
@@ -176,6 +181,7 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
       }));
     }
     add(py.render - pt.render, 300, 500, (side) => ({
+      phase: "render",
       title: `${better(side)} shows its main content ${s(py.render - pt.render)} sooner once it's ready`,
       detail: `On ${worse(side)}, the main content is loaded but waits on CSS, fonts or JavaScript before it's painted.`,
       fix: "Inline the critical CSS, defer non-critical CSS and JavaScript, and use font-display: swap.",
@@ -185,7 +191,10 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
   if (fy && ft) {
     add(fy.renderBlocking.ms - ft.renderBlocking.ms, 300, 500, (side) => ({
       title: `${worse(side)} blocks the first paint for ${s(fy.renderBlocking.ms - ft.renderBlocking.ms)} longer`,
-      detail: `${worse(side)} has ${side === "you" ? ft.renderBlocking.count : fy.renderBlocking.count} render-blocking CSS or JavaScript files against ${side === "you" ? fy.renderBlocking.count : ft.renderBlocking.count}. The screen stays blank until they've downloaded.`,
+      detail:
+        fy.renderBlocking.count === ft.renderBlocking.count
+          ? `Both have ${fy.renderBlocking.count} render-blocking CSS or JavaScript files, but ${worse(side)}'s slowest one holds the screen blank for ${formatMs(side === "you" ? ft.renderBlocking.ms : fy.renderBlocking.ms)} against ${formatMs(side === "you" ? fy.renderBlocking.ms : ft.renderBlocking.ms)}.`
+          : `${worse(side)} has ${side === "you" ? ft.renderBlocking.count : fy.renderBlocking.count} render-blocking CSS or JavaScript files against ${side === "you" ? fy.renderBlocking.count : ft.renderBlocking.count}. The screen stays blank until they've downloaded.`,
       fix: "Add defer to scripts in the <head>, and inline the CSS needed for the top of the page.",
       auditIds: ["render-blocking-insight"],
     }));
@@ -251,6 +260,15 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
     });
   }
 
+  // The LCP reason already names the slower page's biggest LCP phase: don't repeat it.
+  for (const side of ["you", "them"] as const) {
+    if (!reasons.some((r) => r.phase === "lcp" && r.side === side)) continue;
+    const ph = side === "them" ? py : pt;
+    if (!ph) continue;
+    const top = (Object.entries({ delay: ph.delay, download: ph.download, render: ph.render }) as [string, number][]).sort((a, b) => b[1] - a[1])[0][0];
+    const i = reasons.findIndex((r) => r.side === side && r.phase === top);
+    if (i >= 0) reasons.splice(i, 1);
+  }
   reasons.sort((a, b) => b.weight - a.weight);
   const behind = reasons.filter((r) => r.side === "them").map((r) => ({ ...r, auditIds: r.auditIds.filter((id) => you.findings.some((f) => f.auditId === id)) }));
   const ahead = reasons.filter((r) => r.side === "you").map((r) => ({ ...r, fix: undefined }));

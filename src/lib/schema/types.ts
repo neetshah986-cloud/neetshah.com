@@ -81,7 +81,11 @@ export type Report = {
     bytes?: number;
     ms?: number;
     archived?: { date: string; ageDays: number; snapshotUrl: string; reason: string }; // checked the Internet Archive's copy because the site blocked the tool
+    /** Sent by the Schema inspector bookmark: the page as the visitor's browser rendered it. */
+    rendered?: { serverChecked: boolean; serverTypes: string[]; addedTypes: string[]; title?: string };
   };
+  /** The platform and SEO plugin that made the page, when recognised. */
+  platform?: import("./platform").SchemaPlatform | null;
   html: string; // the source that was checked, for the source viewer
   vocabVersion: string;
   blocks: Block[];

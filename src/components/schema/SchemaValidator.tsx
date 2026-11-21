@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Issue, Item, Rendering, Report, RichResult, Severity, Value } from "@/lib/schema/types";
 import { EXAMPLE_CODE } from "./example";
 import { SourceViewer, type Focus } from "./SourceViewer";
+import { schemaSteps } from "@/lib/schema/platform";
+import { forgetSchema, rememberSchema, type SchemaSnapshot } from "@/lib/schema/history";
+import { DoFirst, FixCheck, G, InspectorPanel, RenderedPanel } from "./Extras";
 
-type Mode = "url" | "code";
+type Mode = "url" | "code" | "inspector";
 type Tab = "items" | "google" | "content" | "graph" | "source";
 
 const SEV_ORDER: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
@@ -51,8 +54,14 @@ function IssueLine({ issue }: { issue: Issue }) {
     <div className="flex gap-2.5 py-1.5">
       <SevIcon s={issue.severity} className="mt-0.5 h-4 w-4" />
       <div className="min-w-0 text-[0.92rem] leading-snug">
-        <p className={issue.severity === "error" ? "text-ink" : "text-ink"}>{issue.message}</p>
-        {issue.hint && <p className="mt-0.5 text-ink-soft">{issue.hint}</p>}
+        <p className="text-ink">
+          <G text={issue.message} />
+        </p>
+        {issue.hint && (
+          <p className="mt-0.5 text-ink-soft">
+            <G text={issue.hint} />
+          </p>
+        )}
       </div>
     </div>
   );
@@ -353,6 +362,7 @@ const RICH_STATUS: Record<RichResult["status"], { label: string; tone: string }>
 };
 
 function GoogleView({ report }: { report: Report }) {
+  const p = report.platform;
   if (!report.richResults.length)
     return <Empty title="No Google rich result types found" body="None of the items on this page match a Google Search rich result feature. They can still help search engines understand the page." />;
   return (
@@ -370,7 +380,11 @@ function GoogleView({ report }: { report: Report }) {
               </div>
               <span className={`rounded-md px-2 py-1 text-sm font-medium ${RICH_STATUS[r.status].tone}`}>{RICH_STATUS[r.status].label}</span>
             </div>
-            {r.note && <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">{r.note}</p>}
+            {r.note && (
+              <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
+                <G text={r.note} />
+              </p>
+            )}
             {r.missingRequired.length > 0 && (
               <div className="mt-4">
                 <p className="text-sm font-semibold text-fail">Required, missing</p>
@@ -392,6 +406,20 @@ function GoogleView({ report }: { report: Report }) {
               </div>
             )}
             {r.status === "eligible" && <p className="mt-3 text-[0.95rem] text-ink-soft">All required and recommended fields are present.</p>}
+            {(r.status === "invalid" || r.status === "warnings") &&
+              (() => {
+                const how = schemaSteps(p, r.feature, [...r.missingRequired, ...r.missingRecommended]);
+                return how ? (
+                  <div className="mt-4 rounded-lg bg-mist/70 px-4 py-3">
+                    <p className="text-sm font-semibold">{how.title}</p>
+                    <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-[0.92rem] leading-relaxed text-ink-soft">
+                      {how.steps.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null;
+              })()}
             {r.docs && (
               <a href={r.docs} target="_blank" rel="noopener" className="mt-4 inline-block text-sm font-medium text-serp hover:underline">
                 Google&apos;s {r.feature.toLowerCase()} documentation
@@ -651,7 +679,9 @@ function RenderingPanel({ r }: { r: Rendering }) {
             <SevIcon s={x.s} className="mt-0.5 h-4 w-4" />
             <div className="min-w-0">
               <p className="font-medium leading-snug">{x.title}</p>
-              <p className="mt-1 max-w-4xl text-[0.93rem] leading-relaxed text-ink-soft">{x.body}</p>
+              <p className="mt-1 max-w-4xl text-[0.93rem] leading-relaxed text-ink-soft">
+                <G text={x.body} />
+              </p>
             </div>
           </li>
         ))}
@@ -662,7 +692,7 @@ function RenderingPanel({ r }: { r: Rendering }) {
 
 // ---------- Archived copy notice ----------
 
-function ArchivedNote({ a, liveUrl, onPasteCode }: { a: NonNullable<Report["source"]["archived"]>; liveUrl?: string; onPasteCode: () => void }) {
+function ArchivedNote({ a, liveUrl, onPasteCode, onInspector }: { a: NonNullable<Report["source"]["archived"]>; liveUrl?: string; onPasteCode: () => void; onInspector: () => void }) {
   const days = a.ageDays;
   const date = new Date(a.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const old = days > 30;
@@ -681,6 +711,13 @@ function ArchivedNote({ a, liveUrl, onPasteCode }: { a: NonNullable<Report["sour
 
       <div className="mt-3 border-t border-rule/70 pt-3">
         <p className="font-medium">To check the live page instead</p>
+        <p className="mt-1 text-ink-soft">
+          Quickest: use the{" "}
+          <button type="button" onClick={onInspector} className="font-medium text-serp hover:underline">
+            Schema inspector bookmark
+          </button>{" "}
+          on the live page. It reads the page in your own browser, so the block doesn&apos;t apply. Or copy the source by hand:
+        </p>
         <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-ink-soft">
           <li>
             {liveUrl ? (
@@ -772,11 +809,16 @@ export function SchemaValidator() {
   const [report, setReport] = useState<Report | null>(null);
   const [tab, setTab] = useState<Tab>("items");
   const [copied, setCopied] = useState(false);
+  const [prev, setPrev] = useState<SchemaSnapshot | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const lastRun = useRef<{ mode: "url" | "code" | "rendered"; url?: string; code?: string; title?: string } | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  async function run(next?: { mode: Mode; url?: string; code?: string }) {
-    const m = next?.mode ?? mode;
-    const payload = m === "url" ? { mode: m, url: next?.url ?? url } : { mode: m, code: next?.code ?? code };
+  async function run(next?: { mode: "url" | "code" | "rendered"; url?: string; code?: string; title?: string }) {
+    const m = next?.mode ?? (mode === "inspector" ? "url" : mode);
+    const payload =
+      m === "url" ? { mode: m, url: next?.url ?? url } : m === "rendered" ? { mode: m, url: next?.url, code: next?.code, title: next?.title } : { mode: m, code: next?.code ?? code };
+    lastRun.current = payload;
     setLoading(true);
     setError(null);
     try {
@@ -785,6 +827,7 @@ export function SchemaValidator() {
       if (!res.ok) throw new Error(data.error ?? "The check failed. Try again.");
       const r = data as Report;
       setReport(r);
+      setPrev(r.source.kind === "url" ? rememberSchema(r) : null);
       setTab("items");
       if (m === "url") {
         const u = new URL(window.location.href);
@@ -810,6 +853,37 @@ export function SchemaValidator() {
       run({ mode: "url", url: shared });
     }, 0);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pages sent by the Schema inspector bookmark arrive by postMessage from the tab that opened this one.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("from") !== "inspector") return;
+    const t = setTimeout(() => {
+      setWaiting(true);
+      setMode("inspector");
+    }, 0);
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data;
+      if (!d || d.type !== "ns-schema-inspector" || typeof d.html !== "string" || typeof d.url !== "string") return;
+      if (e.source !== window.opener) return;
+      (e.source as Window).postMessage({ type: "ns-schema-ack" }, e.origin);
+      window.removeEventListener("message", onMsg);
+      setWaiting(false);
+      setUrl(d.url);
+      const u = new URL(window.location.href);
+      u.searchParams.delete("from");
+      window.history.replaceState(null, "", u);
+      run({ mode: "rendered", url: d.url, code: d.html, title: typeof d.title === "string" ? d.title : undefined });
+    };
+    window.addEventListener("message", onMsg);
+    const stop = setTimeout(() => setWaiting(false), 25000);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(stop);
+      window.removeEventListener("message", onMsg);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -856,7 +930,7 @@ export function SchemaValidator() {
       {/* Input */}
       <div className="rounded-2xl border border-rule bg-white p-4 shadow-[0_1px_0_#D9E0EA,0_24px_48px_-32px_rgba(14,26,43,0.3)] sm:p-6">
         <div role="tablist" aria-label="What to check" className="inline-flex rounded-lg bg-mist p-1 text-sm">
-          {(["url", "code"] as Mode[]).map((m) => (
+          {(["url", "code", "inspector"] as Mode[]).map((m) => (
             <button
               key={m}
               role="tab"
@@ -864,12 +938,23 @@ export function SchemaValidator() {
               onClick={() => setMode(m)}
               className={`rounded-md px-3.5 py-1.5 font-medium transition-colors ${mode === m ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink"}`}
             >
-              {m === "url" ? "Fetch URL" : "Paste code"}
+              {m === "url" ? "Fetch URL" : m === "code" ? "Paste code" : <><span className="sm:hidden">Bookmark</span><span className="hidden sm:inline">Inspector bookmark</span></>}
             </button>
           ))}
         </div>
 
+        {mode === "inspector" && (
+          <div className="mt-5">
+            {waiting && (
+              <p role="status" className="mb-4 rounded-lg bg-serp/[0.07] px-4 py-3 font-medium">
+                Waiting for the page from the Schema inspector…
+              </p>
+            )}
+            <InspectorPanel />
+          </div>
+        )}
         <form
+          hidden={mode === "inspector"}
           className="mt-4"
           onSubmit={(e) => {
             e.preventDefault();
@@ -942,8 +1027,20 @@ export function SchemaValidator() {
                   <a href={report.source.finalUrl} target="_blank" rel="noopener nofollow" className="block truncate font-mono text-sm text-serp hover:underline">
                     {report.source.finalUrl}
                   </a>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    HTTP {report.source.status} · {((report.source.bytes ?? 0) / 1024).toFixed(0)} KB · fetched in {((report.source.ms ?? 0) / 1000).toFixed(1)}s
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-soft">
+                    {report.source.rendered ? (
+                      <span>Rendered in your browser by the Schema inspector, {Math.max(1, Math.round((report.source.bytes ?? 0) / 1024))} KB</span>
+                    ) : (
+                      <span>
+                        HTTP {report.source.status}, {((report.source.bytes ?? 0) / 1024).toFixed(0)} KB, fetched in {((report.source.ms ?? 0) / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    {report.platform && (
+                      <span className="rounded-md bg-mist px-2 py-0.5 text-ink">
+                        Built with {report.platform.name}
+                        {report.platform.seo ? ` and ${({ yoast: "Yoast SEO", rankmath: "Rank Math", aioseo: "All in One SEO" } as const)[report.platform.seo]}` : ""}
+                      </span>
+                    )}
                   </p>
                   {report.source.archived && (
                     <ArchivedNote
@@ -954,6 +1051,10 @@ export function SchemaValidator() {
                         setCode("");
                         window.scrollTo({ top: 0 });
                         setTimeout(() => document.getElementById("sv-code")?.focus(), 50);
+                      }}
+                      onInspector={() => {
+                        setMode("inspector");
+                        window.scrollTo({ top: 0 });
                       }}
                     />
                   )}
@@ -1007,6 +1108,19 @@ export function SchemaValidator() {
             </div>
           </div>
 
+          <DoFirst report={report} onTab={setTab} />
+          {prev && (
+            <FixCheck
+              prev={prev}
+              report={report}
+              onAgain={() => lastRun.current && (lastRun.current.mode === "rendered" ? setMode("inspector") : run(lastRun.current))}
+              onClear={() => {
+                if (report.source.finalUrl) forgetSchema(report.source.finalUrl);
+                setPrev(null);
+              }}
+            />
+          )}
+          {report.source.rendered && <RenderedPanel r={report.source.rendered} />}
           {report.rendering && <RenderingPanel r={report.rendering} />}
 
           <div role="tablist" aria-label="Results" className="-mx-1 mt-6 flex gap-1 overflow-x-auto pb-1">

@@ -2,10 +2,10 @@
 
 // Technical words get a dotted underline; hovering, focusing or tapping shows a plain explanation.
 import { Fragment, useId, useState, type ReactNode } from "react";
-import { GLOSSARY, glossaryByKey } from "@/lib/speed/glossary";
+import { GLOSSARY, glossaryByKey, type GlossaryEntry } from "@/lib/speed/glossary";
 
-export function Term({ k, children }: { k: string; children: ReactNode }) {
-  const g = glossaryByKey.get(k);
+export function Term({ k, entry, children }: { k?: string; entry?: GlossaryEntry; children: ReactNode }) {
+  const g = entry ?? (k ? glossaryByKey.get(k) : undefined);
   const id = useId();
   const [open, setOpen] = useState(false);
   const [shift, setShift] = useState(0);
@@ -43,10 +43,10 @@ export function Term({ k, children }: { k: string; children: ReactNode }) {
 }
 
 /** Wraps the first mention of each glossary word in a text with an explanation. */
-export function Glossed({ text, skip = [] }: { text: string; skip?: string[] }) {
+export function Glossed({ text, skip = [], list = GLOSSARY }: { text: string; skip?: string[]; list?: GlossaryEntry[] }) {
   type Hit = { start: number; end: number; key: string };
   const hits: Hit[] = [];
-  for (const g of GLOSSARY) {
+  for (const g of list) {
     if (skip.includes(g.key)) continue;
     const m = g.match.exec(text);
     if (!m) continue;
@@ -62,7 +62,7 @@ export function Glossed({ text, skip = [] }: { text: string; skip?: string[] }) 
   hits.forEach((h, i) => {
     if (h.start > at) out.push(<Fragment key={`t${i}`}>{text.slice(at, h.start)}</Fragment>);
     out.push(
-      <Term key={`g${i}`} k={h.key}>
+      <Term key={`g${i}`} entry={list.find((g) => g.key === h.key)}>
         {text.slice(h.start, h.end)}
       </Term>,
     );

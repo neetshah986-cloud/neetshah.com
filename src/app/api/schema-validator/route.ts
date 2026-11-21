@@ -2,6 +2,36 @@ import { fetchArchived, waybackDate } from "@/lib/archive";
 import { FetchError, fetchPage, rateLimited, type FetchedPage } from "@/lib/safe-fetch";
 import { analyse } from "@/lib/schema";
 import { inspectGtm } from "@/lib/schema/gtm";
+import { detectSchemaPlatform } from "@/lib/schema/platform";
+import type { Report } from "@/lib/schema/types";
+
+const MAX_RENDERED = 4 * 1024 * 1024;
+
+const typesIn = (r: Report) => [...new Set(r.blocks.flatMap((b) => b.items.flatMap((i) => i.types.map((t) => t.replace(/^https?:\/\/schema\.org\//, "")))))];
+
+/** Page sent by the Schema inspector bookmark, compared with what the server sends. */
+async function rendered(url: string, html: string, title?: string): Promise<Report> {
+  const started = Date.now();
+  const report = analyse(html, { kind: "url", url, finalUrl: url, status: 200, bytes: html.length, ms: 0 });
+  let serverTypes: string[] = [];
+  let serverChecked = false;
+  try {
+    const page = await fetchPage(url, { timeoutMs: 8_000 });
+    if (page.status < 400) {
+      serverTypes = typesIn(analyse(page.html, { kind: "url", url, finalUrl: page.finalUrl, status: page.status }));
+      serverChecked = true;
+    }
+  } catch {
+    /* blocked or unreachable: the rendered page is still checked */
+  }
+  const mine = typesIn(report);
+  report.source.ms = Date.now() - started;
+  report.source.rendered = { serverChecked, serverTypes, addedTypes: serverChecked ? mine.filter((t) => !serverTypes.includes(t)) : [], title };
+  // The rendering check reads raw HTML signals, which don't apply to a rendered page.
+  report.rendering = null;
+  report.platform = detectSchemaPlatform(html);
+  return report;
+}
 
 const MAX_CODE = 1024 * 1024;
 
@@ -9,7 +39,7 @@ export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
   if (rateLimited(`schema:${ip}`, 40)) return Response.json({ error: "Too many checks in a minute. Wait a moment and try again." }, { status: 429 });
 
-  let body: { mode?: string; url?: string; code?: string; lite?: boolean };
+  let body: { mode?: string; url?: string; code?: string; lite?: boolean; title?: string };
   try {
     body = await request.json();
   } catch {
@@ -17,11 +47,26 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (body.mode === "rendered") {
+      const html = String(body.code ?? "");
+      let pageUrl: URL;
+      try {
+        pageUrl = new URL(String(body.url ?? ""));
+      } catch {
+        return Response.json({ error: "The page address was missing." }, { status: 400 });
+      }
+      if (!html.trim()) return Response.json({ error: "The page arrived empty. Run the Schema inspector again." }, { status: 400 });
+      if (html.length > MAX_RENDERED) return Response.json({ error: "The page is larger than 4 MB, even without scripts and styles." }, { status: 413 });
+      return Response.json(await rendered(pageUrl.href, html, body.title));
+    }
+
     if (body.mode === "code") {
       const code = String(body.code ?? "");
       if (!code.trim()) return Response.json({ error: "Paste some JSON-LD or HTML to check." }, { status: 400 });
       if (code.length > MAX_CODE) return Response.json({ error: "That's more than 1 MB of code. Paste a smaller part." }, { status: 413 });
-      return Response.json(analyse(code, { kind: "code" }));
+      const r = analyse(code, { kind: "code" });
+      r.platform = detectSchemaPlatform(code);
+      return Response.json(r);
     }
 
     const url = String(body.url ?? "").trim();
@@ -71,6 +116,7 @@ export async function POST(request: Request) {
         : undefined,
     });
     if (report.rendering?.tagManager) report.rendering.gtm = await inspectGtm(checked.html);
+    report.platform = detectSchemaPlatform(checked.html);
     const looksBlocked = !archived && BLOCKED.includes(checked.status) && Object.keys(report.items).length === 0;
     if (looksBlocked) {
       report.counts.warnings++;

@@ -6,7 +6,7 @@ import { SchemaTool } from "@/components/schema/SchemaTool";
 import { VOCAB_VERSION } from "@/lib/schema/vocab";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-21T22:30:00+05:30";
+const UPDATED = "2026-11-21T23:30:00+05:30";
 const URL = `${site.url}/tools/schema-validator`;
 
 export const metadata: Metadata = {
@@ -220,6 +220,27 @@ ERRORS
   </Panel>
 );
 
+const InspectorExample = () => (
+  <Panel label="Schema inspector bookmark">
+    <p className="text-ink-soft">Rendered in your browser by the Schema inspector</p>
+    <p className="mt-2 font-medium text-warn">Only after the page loads: Product, BreadcrumbList</p>
+    <p className="mt-1 text-ink-soft">Tag Manager adds these in the browser. Output them in the page template.</p>
+    <p className="mt-3 border-t border-rule pt-3">
+      <span className="font-semibold">Do this first:</span> <span className="text-ink-soft">add image to the Product markup so the page can get the merchant listing rich result.</span>
+    </p>
+  </Panel>
+);
+
+const FixCheckExample = () => (
+  <Panel label="Did my fix work?">
+    <p className="text-xl font-semibold tracking-tight">It worked: 3 issues fixed.</p>
+    <p className="mt-1 text-ink-soft">Errors 3 to 0, warnings 4 to 2.</p>
+    <p className="mt-2 text-pass">Merchant listings: broken to eligible with warnings</p>
+    <p className="mt-3 border-t border-rule pt-3 text-sm font-semibold">On your WordPress site</p>
+    <p className="mt-1 text-ink-soft">For stars, turn on reviews: WooCommerce, Settings, Products, Enable star rating.</p>
+  </Panel>
+);
+
 const ArchiveExample = () => (
   <Panel label="When a site blocks the check">
     <p className="font-medium">Checked the Internet Archive&apos;s copy from 7 August 2026</p>
@@ -273,6 +294,24 @@ const features = [
     Example: SourceExample,
   },
   {
+    id: "inspector",
+    title: "Check JavaScript and Tag Manager schema with one click",
+    body: [
+      "Fetching a URL shows what your server sends. The Schema inspector shows the rest: it's a bookmark you drag to your bookmarks bar, then click on any page once it has loaded. It takes the page as your browser shows it, including structured data that JavaScript or Google Tag Manager added, and opens it here, fully checked.",
+      "It runs in your own browser, so it works on sites that block automated tools and on pages behind a login. The result lists the types that only appear after the page loads, by comparing with the server HTML, so you can see exactly what depends on JavaScript or Tag Manager.",
+    ],
+    Example: InspectorExample,
+  },
+  {
+    id: "fix-check",
+    title: "Know whether your fix worked, with steps for your platform",
+    body: [
+      "Check a page again after a change and the result opens with what changed since last time: errors and warnings before and after, which issues are fixed, which are new, and which rich results went from broken to eligible. Earlier checks are saved only in your browser.",
+      "When the validator recognises the platform, such as WordPress with Yoast SEO, Rank Math or WooCommerce, Shopify, Wix, Squarespace or Webflow, each broken rich result comes with where to fix it there. A \"Do this first\" line names the single most useful fix, and terms like JSON-LD, @type and rich result explain themselves when you hover over them.",
+    ],
+    Example: FixCheckExample,
+  },
+  {
     id: "compare",
     title: "Compare your structured data with the pages ranking above you",
     body: [
@@ -321,7 +360,7 @@ const features = [
     title: "Validate pages on sites that block automated checks",
     body: [
       "Many large sites, especially banks, insurers and marketplaces, block or stall requests from tools, so a validator often gets an error instead of the page. When that happens here, the validator checks the latest copy of the page saved by the Internet Archive and validates that instead, so you still get the full report.",
-      "The result says clearly which copy was checked, its date and how old it is, with a link to the archived page. If you need the live version, the notice walks you through it: press Ctrl+U, copy the source and paste it into Paste code. One click takes you there.",
+      "The result says clearly which copy was checked, its date and how old it is, with a link to the archived page. For the live version, use the Schema inspector bookmark on the page: it reads the page in your own browser, so the block doesn't apply.",
     ],
     Example: ArchiveExample,
   },
@@ -346,6 +385,8 @@ const comparison: { label: string; us: string; org: string; rrt: string }[] = [
   { label: "Detects garbled text from encoding errors", us: "Yes", org: "No", rrt: "No" },
   { label: "Entity graph with broken @id references", us: "Yes", org: "No", rrt: "No" },
   { label: "Falls back to the latest archived copy when a site blocks the check", us: "Yes", org: "No", rrt: "No" },
+  { label: "Reads the page as your browser renders it, with JavaScript and GTM schema (bookmark)", us: "Yes", org: "No", rrt: "Yes, as Googlebot" },
+  { label: "Shows what changed since your last check", us: "Yes", org: "No", rrt: "No" },
   { label: "Compares rich results with up to 5 competitor pages", us: "Yes", org: "No", rrt: "No" },
   { label: "Reads Search Console rich result exports and writes the fixed JSON-LD", us: "Yes", org: "No", rrt: "No" },
 ];
@@ -362,7 +403,7 @@ const commonErrors = [
 ];
 
 const steps = [
-  { t: "Enter a URL or paste code", d: "Validate a live page by URL, or paste JSON-LD, a script tag or a full HTML page. Pasting the rendered HTML from your browser's DevTools lets you check JavaScript-rendered content too." },
+  { t: "Enter a URL or paste code", d: "Validate a live page by URL, or paste JSON-LD, a script tag or a full HTML page. For JavaScript and Tag Manager schema, or sites that block tools, use the Schema inspector bookmark on the page." },
   { t: "Read the rendering check", d: "See straight away whether your structured data and the content it describes are in the server HTML, rendered by JavaScript or added through Tag Manager." },
   { t: "Work through the items", d: "Choose a type, then an item. Each property shows its issues inline, and selecting it highlights the exact line in the source." },
   { t: "Check Google features and content match", d: "Confirm which rich results the page is eligible for, what's missing, and whether every value in the markup is visible to users." },
@@ -384,11 +425,11 @@ const faqs = [
   },
   {
     q: "Does it run JavaScript on the page?",
-    a: "No, and that's deliberate. It reads the raw HTML your server sends, which is what crawlers receive first and what many AI crawlers rely on entirely. Instead of hiding the difference, it tells you which parts of your markup and content depend on JavaScript. To check a JavaScript-rendered page, paste its rendered HTML from your browser's DevTools.",
+    a: "Fetch URL doesn't, deliberately: it reads the raw HTML your server sends, which is what crawlers receive first and what many AI crawlers rely on entirely, and tells you which parts depend on JavaScript. To check the page after JavaScript and Tag Manager have run, use the Schema inspector bookmark: click it on the loaded page and it sends the rendered page here, listing the types that only appear after loading.",
   },
   {
     q: "Can it check structured data added through Google Tag Manager?",
-    a: "Yes. When a page loads Tag Manager, the validator opens each GTM container and looks for Custom HTML tags that write JSON-LD, then lists the schema types they add. It doesn't validate those tags' contents, because they only exist after GTM runs in the browser, which is also why moving them into the page template is the better setup.",
+    a: "Yes. When a page loads Tag Manager, the validator opens each GTM container and looks for Custom HTML tags that write JSON-LD, then lists the schema types they add. To validate what those tags add, click the Schema inspector bookmark on the loaded page: it reads the page after GTM has run. Moving the markup into the page template is still the better setup.",
   },
   {
     q: "Why does it say my FAQ markup won't show in Google?",
@@ -396,7 +437,7 @@ const faqs = [
   },
   {
     q: "What happens if a website blocks the validator?",
-    a: "Some sites block or stall automated requests. When that happens, the validator checks the latest copy of the page saved by the Internet Archive and tells you its date and age. To check the live page, open it, press Ctrl+U (Cmd+Option+U on a Mac), copy the source and paste it into Paste code.",
+    a: "Some sites block or stall automated requests. When that happens, the validator checks the latest copy of the page saved by the Internet Archive and tells you its date and age. To check the live page, open it in your browser and click the Schema inspector bookmark. It reads the page on your computer, so the block doesn't apply.",
   },
   {
     q: "Does valid markup guarantee rich results?",
@@ -404,7 +445,11 @@ const faqs = [
   },
   {
     q: "Is it free, and are my results stored?",
-    a: "It's free and needs no account. The page you enter is fetched once to run the check, and the results aren't saved. Search Console exports are read in your browser and never uploaded.",
+    a: "It's free and needs no account. The page you enter is fetched once to run the check, and the results aren't saved on our side. Search Console exports are read in your browser and never uploaded. To show what changed since your last check, a short summary of each result (counts and issue names, not the page) is kept in your own browser, and you can clear it at any time.",
+  },
+  {
+    q: "How do I use the Schema inspector bookmark?",
+    a: "Open the Inspector bookmark tab and drag the Schema inspector button to your bookmarks bar. Then open any page, let it load, and click the bookmark. A new tab opens with the result. If nothing opens, allow pop-ups for that site. The bookmark sends the page text and structured data to the validator only; scripts, styles and images are left out.",
   },
   {
     q: "How do I compare my schema markup with competitors?",
@@ -633,7 +678,7 @@ export default function SchemaValidatorPage() {
             <Byline />
             <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
               Built from the checks I run in real technical SEO audits. Updated{" "}
-              <time dateTime={UPDATED}>20 November 2026</time>, with Google&apos;s structured data rules current to that date.
+              <time dateTime={UPDATED}>21 November 2026</time>, with Google&apos;s structured data rules current to that date.
             </p>
           </div>
           <LinkedInLink className="shrink-0" />

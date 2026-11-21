@@ -158,6 +158,27 @@ const CrawlerExample = () => (
   </Panel>
 );
 
+const ReplayExample = () => (
+  <Panel label="Page load replay, exportable as a video or GIF">
+    <div className="grid grid-cols-[5.5rem_1fr] gap-4">
+      <div className="relative h-40 overflow-hidden rounded-lg border border-rule bg-white" aria-hidden="true">
+        <div className="h-4 bg-ink" />
+        <div className="relative m-2 h-14 rounded bg-gradient-to-br from-serp/30 to-serp/10">
+          <span className="absolute -inset-0.5 rounded outline outline-2 outline-serp" />
+        </div>
+        <div className="mx-2 h-2 w-3/4 rounded bg-ink/20" />
+      </div>
+      <div className="min-w-0 text-sm">
+        <p className="text-3xl font-semibold tracking-tight">2.7 s</p>
+        <p className="mt-1 text-pass">✓ First content 2.6 s</p>
+        <p className="text-pass">✓ Main content (LCP) 2.7 s</p>
+        <p className="text-ink-soft">○ Fully loaded 3.1 s</p>
+        <p className="mt-2 rounded-md bg-mist px-2 py-1.5">Main content is visible. The remaining files are still loading.</p>
+      </div>
+    </div>
+  </Panel>
+);
+
 const PlatformExample = () => (
   <Panel label="Steps for the platform the site is built on">
     <p className="inline-flex items-center gap-1.5 rounded-md bg-mist px-2.5 py-1 text-sm">
@@ -255,6 +276,15 @@ const features = [
       "AI platforms don't publish speed thresholds, so the tool doesn't invent any. It shows the things that decide whether a crawler can read the page at all.",
     ],
     Example: CrawlerExample,
+  },
+  {
+    id: "replay",
+    title: "Watch the page load, and download the video",
+    body: [
+      "A replay built from the snapshots Google's test takes while the page loads, with a running clock, the moments of first content, main content and full load, the LCP element outlined when it appears and the elements that moved marked in red.",
+      "A caption explains each moment, like \"Blank screen: waiting for styles.css (render-blocking)\", and the files still downloading are counted alongside. Compare mobile and desktop side by side, slow it down, and download it as an MP4 or WebM video or a GIF to share with a client or team.",
+    ],
+    Example: ReplayExample,
   },
   {
     id: "platform",

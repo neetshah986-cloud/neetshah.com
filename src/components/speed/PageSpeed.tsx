@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { devReport, findingText } from "@/lib/speed/devreport";
 import { formatBytes, formatMs, formatThreshold, METRICS, RATING_LABEL, thresholds, type MetricKey, type Rating } from "@/lib/speed/metrics";
 import type { CodeBlock, Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Strategy } from "@/lib/speed/types";
+import { ReplaySection } from "./Replay";
 import { ScoreCalculator } from "./ScoreCalculator";
 import { TrendSection } from "./Trend";
 import { WaterfallSection } from "./Waterfall";
@@ -609,9 +610,9 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
   );
 }
 
-export type ResultTab = "overview" | "causes" | "fixes" | "waterfall" | "trend" | "calculator" | "crawlers" | "weight";
+export type ResultTab = "overview" | "causes" | "fixes" | "waterfall" | "video" | "trend" | "calculator" | "crawlers" | "weight";
 
-function RunView({ run, view, setView }: { run: SpeedRun; view: ResultTab; setView: (t: ResultTab) => void }) {
+function RunView({ run, other, view, setView }: { run: SpeedRun; other?: SpeedRun; view: ResultTab; setView: (t: ResultTab) => void }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(run.findings.slice(0, 2).map((f) => f.id)));
   const barRef = useRef<HTMLDivElement>(null);
   // Keep the active tab visible in the bar on narrow screens.
@@ -654,6 +655,7 @@ function RunView({ run, view, setView }: { run: SpeedRun; view: ResultTab; setVi
     { id: "causes", label: "Root causes", badge: problems.length ? { text: String(problems.length), tone: problems.some((d) => d.rating === "poor") ? "poor" : "ni" } : { text: "0", tone: "good" } },
     { id: "fixes", label: "Fixes", badge: run.findings.length ? { text: String(run.findings.length), tone: highFixes ? "poor" : "ni" } : { text: "0", tone: "good" } },
     { id: "waterfall", label: "Waterfall", badge: run.waterfall?.rows.length ? { text: `${run.waterfall.rows.length} files`, tone: "plain" } : null },
+    { id: "video", label: "Video", badge: run.filmstrip.length ? { text: "Replay", tone: "plain" } : null },
     { id: "trend", label: "Trend", badge: null },
     { id: "calculator", label: "Score calculator", badge: null },
     { id: "crawlers", label: "AI & crawlers", badge: { text: crawlerIssues ? String(crawlerIssues) : "OK", tone: crawlerIssues ? "ni" : "good" } },
@@ -852,6 +854,13 @@ function RunView({ run, view, setView }: { run: SpeedRun; view: ResultTab; setVi
           <section>
             <SectionTitle sub="Every file the page loaded, in order, and what the pattern says about why the page is slow.">Request waterfall</SectionTitle>
             {run.waterfall?.rows.length ? <WaterfallSection wf={run.waterfall} /> : <p className="text-ink-soft">Google didn&apos;t return the list of requests for this test.</p>}
+          </section>
+        )}
+
+        {view === "video" && (
+          <section>
+            <SectionTitle sub="Watch the page load step by step, with what's happening at each moment. Download it as a video or GIF to share.">Page load replay</SectionTitle>
+            {run.filmstrip.length ? <ReplaySection run={run} other={other} /> : <p className="text-ink-soft">Google didn&apos;t return snapshots for this test, so there&apos;s nothing to replay.</p>}
           </section>
         )}
 
@@ -1059,7 +1068,7 @@ export function PageSpeed() {
                   {current.error}
                 </p>
               )}
-              {current.run && !current.loading && <RunView key={current.run.fetchedAt + tab} run={current.run} view={view} setView={setView} />}
+              {current.run && !current.loading && <RunView key={current.run.fetchedAt + tab} run={current.run} other={state[tab === "mobile" ? "desktop" : "mobile"].run} view={view} setView={setView} />}
             </div>
           </div>
         )}

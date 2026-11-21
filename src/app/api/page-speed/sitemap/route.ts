@@ -30,8 +30,15 @@ function parse(xml: string) {
 /** Prefer one sitemap per page type (products, categories, posts, pages) over many of the same kind. */
 function pickChildren(children: string[]) {
   const kind = (u: string) => {
-    const name = u.toLowerCase().split("/").pop() ?? u;
-    return name.replace(/[-_]?\d+(\.xml(\.gz)?)?$/, "").replace(/\.xml(\.gz)?$/, "").replace(/\?.*$/, "");
+    let name = u.toLowerCase();
+    try {
+      name = new URL(u).pathname.toLowerCase();
+    } catch {
+      /* not a URL */
+    }
+    name = name.split("/").pop() ?? name;
+    // sitemap_products_3.xml, post-sitemap2.xml, sitemap-pages-1.xml.gz -> one kind per type
+    return name.replace(/\.xml(\.gz)?$/, "").replace(/[-_]?\d+$/, "");
   };
   const seen = new Map<string, string[]>();
   for (const c of children) {

@@ -7,9 +7,9 @@ const MAX_CODE = 1024 * 1024;
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
-  if (rateLimited(ip)) return Response.json({ error: "Too many checks in a minute. Wait a moment and try again." }, { status: 429 });
+  if (rateLimited(`schema:${ip}`, 40)) return Response.json({ error: "Too many checks in a minute. Wait a moment and try again." }, { status: 429 });
 
-  let body: { mode?: string; url?: string; code?: string };
+  let body: { mode?: string; url?: string; code?: string; lite?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -91,6 +91,8 @@ export async function POST(request: Request) {
         hint: "Search engines don't index pages that return an error, so their structured data isn't used.",
       });
     }
+    // Comparisons and Search Console checks don't need the page source or the content match.
+    if (body.lite) return Response.json({ ...report, html: "", content: null, graph: { nodes: [], edges: [] }, blocks: report.blocks.map((b) => ({ ...b, raw: undefined })) });
     return Response.json(report);
   } catch (e) {
     if (e instanceof FetchError) return Response.json({ error: e.message }, { status: e.status });

@@ -14,6 +14,10 @@ export type GscExport = {
   issue?: string;
   /** Column header of the group value, e.g. "Group LCP". */
   valueLabel?: string;
+  /** Everything outside the examples table (Metadata.csv, other sheets) as text, for other report types. */
+  meta?: string;
+  /** Key-value pairs from two-column tables such as Metadata.csv. */
+  pairs?: Record<string, string>;
 };
 
 type Table = string[][];
@@ -130,12 +134,16 @@ function fromTables(tables: Record<string, Table>, fileName = ""): GscExport {
   const fromHeader = detectIssue(valueCol >= 0 ? header[valueCol] : "");
   const fromName = detectIssue(fileName);
   const issue = metaText.match(/(LCP|INP|CLS)\b[^|]{0,80}/i)?.[0]?.trim();
+  const pairs: Record<string, string> = {};
+  for (const t of Object.values(tables)) if (t !== best) for (const r of t) if (r.length >= 2 && r[0] && r[1]) pairs[r[0]] = r[1];
   return {
     rows,
     metric: fromHeader.metric ?? fromMeta.metric ?? fromName.metric,
     device: fromMeta.device ?? fromName.device,
     issue,
     valueLabel: valueCol >= 0 ? header[valueCol] : undefined,
+    meta: `${fileName} | ${metaText}`,
+    pairs,
   };
 }
 

@@ -802,8 +802,9 @@ export function SchemaValidator() {
 
   // Shared links: /tools/schema-validator?url=https://example.com runs straight away.
   useEffect(() => {
-    const shared = new URLSearchParams(window.location.search).get("url");
-    if (!shared) return;
+    const q = new URLSearchParams(window.location.search);
+    const shared = q.get("url");
+    if (!shared || q.get("mode")) return;
     const t = setTimeout(() => {
       setUrl(shared);
       run({ mode: "url", url: shared });

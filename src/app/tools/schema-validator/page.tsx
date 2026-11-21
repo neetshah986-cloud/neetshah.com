@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { Byline, LinkedInLink } from "@/components/Person";
-import { SchemaValidator } from "@/components/schema/SchemaValidator";
+import { SchemaTool } from "@/components/schema/SchemaTool";
 import { VOCAB_VERSION } from "@/lib/schema/vocab";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-20T22:15:00+05:30";
+const UPDATED = "2026-11-21T22:30:00+05:30";
 const URL = `${site.url}/tools/schema-validator`;
 
 export const metadata: Metadata = {
@@ -105,6 +105,52 @@ const SourceExample = () => (
         </div>
       ))}
     </div>
+  </Panel>
+);
+
+const CompareExample = () => (
+  <Panel label="Rich results side by side, one keyword">
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-left text-xs text-ink-soft">
+          <th className="pb-1.5 font-medium">Feature</th>
+          <th className="pb-1.5 text-center font-medium">You</th>
+          <th className="pb-1.5 text-center font-medium">Rival A</th>
+          <th className="pb-1.5 text-center font-medium">Rival B</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[
+          ["Review stars", "–", "✓", "✓"],
+          ["Price and stock", "✓", "✓", "✓"],
+          ["Breadcrumb", "–", "✓", "–"],
+          ["Merchant listing", "✗", "✓", "✓"],
+        ].map(([f, ...c]) => (
+          <tr key={f} className="border-t border-rule">
+            <td className="py-1.5 font-medium">{f}</td>
+            {c.map((x, i) => (
+              <td key={i} className={`py-1.5 text-center font-semibold ${x === "✓" ? "text-pass" : x === "✗" ? "text-fail" : "text-ink-soft"}`}>
+                {x}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <p className="mt-3 text-sm">2 of 2 competitors can show review stars; you can&apos;t. <span className="text-serp">Get the code</span></p>
+  </Panel>
+);
+
+const GscExample = () => (
+  <Panel label="Search Console: Missing field “price” (in “offers”)">
+    <p className="text-sm font-medium">9 of 10 example pages still have the issue.</p>
+    <p className="mt-1 text-sm text-ink-soft">offers.price is missing on 9 of 10: fix it once in the product template.</p>
+    <pre className="mt-3 overflow-x-auto rounded border border-rule bg-white py-2 font-mono text-[0.75rem] leading-relaxed">
+      <span className="block px-3">{`"offers": {`}</span>
+      <span className="block px-3">{`  "priceCurrency": "INR",`}</span>
+      <span className="block bg-pass/10 px-3">{`+ "price": "PRICE e.g. 1499.00"`}</span>
+      <span className="block px-3">{`}`}</span>
+    </pre>
   </Panel>
 );
 
@@ -227,6 +273,24 @@ const features = [
     Example: SourceExample,
   },
   {
+    id: "compare",
+    title: "Compare your structured data with the pages ranking above you",
+    body: [
+      "Add your page and up to five competitors ranking for the same keyword. Each page is checked at once and shown side by side: product snippets, merchant listings, review stars, price and stock, shipping and returns, breadcrumbs, organization, video and every other Google feature found on any of the pages.",
+      "Above the table, the gaps in plain words, such as \"2 of 3 competitors can show review stars; you can't\", each with the code to add: your existing markup with the missing fields filled in, or a starter block built for your page. Download the table as CSV for a client.",
+    ],
+    Example: CompareExample,
+  },
+  {
+    id: "search-console",
+    title: "Fix rich result issues from Search Console",
+    body: [
+      "Search Console lists issues like \"Missing field 'price'\" with example URLs, but not the fix. Export the issue and upload the ZIP: the tool reads the report and the field, checks every example page as it is now, and tells you which pages are already fixed so you know when to click Validate fix.",
+      "For the pages that still have the issue, you get the page's own JSON-LD with the missing field added and highlighted. When the same field is missing on most pages, it says so: that's a template fix, done once in the theme, plugin or product template.",
+    ],
+    Example: GscExample,
+  },
+  {
     id: "rich-results",
     title: "Know which Google rich results you can actually get",
     body: [
@@ -282,6 +346,8 @@ const comparison: { label: string; us: string; org: string; rrt: string }[] = [
   { label: "Detects garbled text from encoding errors", us: "Yes", org: "No", rrt: "No" },
   { label: "Entity graph with broken @id references", us: "Yes", org: "No", rrt: "No" },
   { label: "Falls back to the latest archived copy when a site blocks the check", us: "Yes", org: "No", rrt: "No" },
+  { label: "Compares rich results with up to 5 competitor pages", us: "Yes", org: "No", rrt: "No" },
+  { label: "Reads Search Console rich result exports and writes the fixed JSON-LD", us: "Yes", org: "No", rrt: "No" },
 ];
 
 const commonErrors = [
@@ -338,7 +404,15 @@ const faqs = [
   },
   {
     q: "Is it free, and are my results stored?",
-    a: "It's free and needs no account. The page you enter is fetched once to run the check, and the results aren't saved.",
+    a: "It's free and needs no account. The page you enter is fetched once to run the check, and the results aren't saved. Search Console exports are read in your browser and never uploaded.",
+  },
+  {
+    q: "How do I compare my schema markup with competitors?",
+    a: "Open the Compare with competitors tab, add your page and up to five pages ranking for the same keyword, and run it. You'll see which rich results each page can show, which ones you're missing, and the code to add. Compare similar pages: your product page against theirs.",
+  },
+  {
+    q: "How do I fix a rich result issue in Search Console?",
+    a: "In Search Console, open the rich result report (for example Product snippets), click the issue, export it as CSV and upload the ZIP in the Search Console tab. The tool checks each example page, shows which are already fixed, and gives the JSON-LD with the missing field added. After the fix is live, click Validate fix in Search Console.",
   },
 ];
 
@@ -452,7 +526,7 @@ export default function SchemaValidatorPage() {
           ))}
         </ul>
         <div className="mt-10">
-          <SchemaValidator />
+          <SchemaTool />
         </div>
       </section>
 

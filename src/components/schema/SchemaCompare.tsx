@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normaliseUrl, runLimited } from "@/lib/speed/client";
-import { compareSchema, typesOf, type Cell, type Entrant } from "@/lib/schema/compare";
+import { blockedReport, compareSchema, typesOf, type Cell, type Entrant } from "@/lib/schema/compare";
 import { fetchSchema } from "@/lib/schema/client";
 import { forFeature, pretty, template, withMissing } from "@/lib/schema/fix";
 import { FixCode } from "./FixCode";
@@ -255,6 +255,7 @@ export function SchemaCompare() {
                               {host(e.url)}
                             </span>
                             {e.you && <span className="mt-0.5 inline-block rounded bg-serp px-1.5 py-px text-[0.68rem] font-semibold text-white">You</span>}
+                            {blockedReport(e.report) && <span className="mt-0.5 block text-[0.68rem] font-normal text-warn">Blocked the tool</span>}
                           </th>
                         ))}
                       </tr>
@@ -312,7 +313,7 @@ export function SchemaCompare() {
                           {r.counts.items} item{r.counts.items === 1 ? "" : "s"}, <span className={r.counts.errors ? "font-medium text-fail" : ""}>{r.counts.errors} error{r.counts.errors === 1 ? "" : "s"}</span>, {r.counts.warnings} warning{r.counts.warnings === 1 ? "" : "s"}
                         </p>
                         <ul className="mt-2 flex flex-wrap gap-1">
-                          {typesOf(r).length ? typesOf(r).slice(0, 10).map((t) => <li key={t} className="rounded bg-mist px-1.5 py-0.5 text-xs">{t}</li>) : <li className="text-sm text-ink-soft">No structured data found</li>}
+                          {typesOf(r).length ? typesOf(r).slice(0, 10).map((t) => <li key={t} className="rounded bg-mist px-1.5 py-0.5 text-xs">{t}</li>) : <li className="text-sm text-ink-soft">{blockedReport(r) ? "The site blocked this tool, so its markup couldn't be read. It isn't counted in the gaps." : "No structured data found"}</li>}
                         </ul>
                         {r.source.archived && <p className="mt-2 text-xs text-warn">The site blocked the tool, so its Internet Archive copy from {r.source.archived.date} was checked.</p>}
                         {js && <p className="mt-2 text-xs text-ink-soft">Some markup may be added by JavaScript or Tag Manager, which this check can&apos;t fully see.</p>}

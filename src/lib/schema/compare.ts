@@ -53,7 +53,9 @@ function offerHas(i: Item, name: string): boolean {
 
 /** Rows for what shoppers actually see, worked out from the product items. */
 function derived(r: Report): Record<string, Cell> {
-  const products = Object.values(r.items).filter((i) => i.types.some((t) => /^(Product|ProductGroup|IndividualProduct)$/.test(t)));
+  // Only products Google treats as the page's product (the ones its product rules apply to), not products listed in an ItemList on a category page.
+  const main = new Set(r.richResults.filter((x) => x.feature === "Product snippet" || x.feature === "Merchant listing").map((x) => x.item));
+  const products = Object.values(r.items).filter((i) => main.has(i.uid));
   const snippet = r.richResults.filter((x) => x.feature === "Product snippet" || x.feature === "Review snippet (aggregate rating)");
   const bad = snippet.length > 0 && snippet.every((x) => x.status === "invalid");
   const stars = products.some((p) => hasProp(p, "aggregateRating") || hasProp(p, "review"));
@@ -73,6 +75,8 @@ function best(r: Report, feature: string): { cell: Cell; note: string } {
   const note = top.missingRequired.length ? `Missing: ${top.missingRequired.join(", ")}` : top.missingRecommended.length ? `Could add: ${top.missingRecommended.slice(0, 3).join(", ")}` : "";
   return { cell: toCell(top.status), note };
 }
+
+export const blockedReport = (r: Report) => r.issues.some((i) => i.code === "blocked");
 
 export function compareSchema(entrants: Entrant[]) {
   const done = entrants.filter((e): e is Entrant & { report: Report } => !!e.report);
@@ -95,13 +99,14 @@ export function compareSchema(entrants: Entrant[]) {
   const youIdx = done.findIndex((e) => e.you);
   const gaps: Gap[] = [];
   if (youIdx >= 0) {
-    const others = done.length - 1;
+    const readable = done.map((e) => !blockedReport(e.report));
+    const others = readable.filter((ok, i) => ok && i !== youIdx).length;
     for (const row of rows) {
       if (row.cells.every((c) => c === "retired" || c === "none")) continue;
       if (/^(FAQ|How-to)$/.test(row.feature)) continue;
       const yours = row.cells[youIdx];
       if (yours === "eligible" || yours === "warnings") continue;
-      const have = row.cells.filter((c, i) => i !== youIdx && (c === "eligible" || c === "warnings")).length;
+      const have = row.cells.filter((c, i) => i !== youIdx && readable[i] && (c === "eligible" || c === "warnings")).length;
       if (!have) continue;
       const why =
         yours === "invalid"

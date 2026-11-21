@@ -118,14 +118,44 @@ function Row({ t, max, open, onToggle }: { t: ThirdParty; max: number; open: boo
   );
 }
 
+/** Tools named in the page HTML that didn't download during Google's test. */
+export function DelayedTools({ run }: { run: SpeedRun }) {
+  const d = run.thirdParty?.delayed ?? [];
+  if (!d.length) return null;
+  const shopify = d.filter((t) => t.viaShopifyPixels);
+  return (
+    <div className="rounded-xl border border-pass/30 bg-pass/5 p-5">
+      <p className="flex items-center gap-2 font-medium">
+        <ToneIcon tone="good" />
+        In the page code, but set to load later ({d.length})
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-1.5">
+        {d.map((t) => (
+          <li key={t.name} className="rounded bg-white px-2 py-0.5 text-sm ring-1 ring-rule">
+            {t.name}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[0.93rem] leading-relaxed text-ink-soft">
+        These tools are named in the page&apos;s HTML but didn&apos;t download during Google&apos;s test, so they don&apos;t slow the first load and aren&apos;t counted above. They start after the page has loaded or after a visitor scrolls or taps. That&apos;s why browser extensions such as Wappalyzer, which look at the page after you&apos;ve opened it, list them.
+        {shopify.length > 0 &&
+          ` ${shopify.map((t) => t.name).join(", ")} ${shopify.length === 1 ? "is" : "are"} added through Shopify's Customer events (Settings, Customer events), which run in a sandbox after the page loads. That's the setup Shopify recommends for speed.`}
+      </p>
+    </div>
+  );
+}
+
 export function ThirdPartySection({ run }: { run: SpeedRun }) {
   const tp = run.thirdParty;
   const [open, setOpen] = useState<Set<string>>(() => new Set(tp?.list[0] && !tp.list[0].essential ? [tp.list[0].name] : []));
   if (!tp || !tp.list.length)
     return (
-      <p className="rounded-xl border border-dashed border-rule bg-white p-5 leading-relaxed text-ink-soft">
-        No outside companies&apos; code ran on this page. Everything came from the site itself, which is good for speed.
-      </p>
+      <div className="space-y-5">
+        <p className="rounded-xl border border-dashed border-rule bg-white p-5 leading-relaxed text-ink-soft">
+          No outside companies&apos; code downloaded during Google&apos;s test. Everything that loaded came from the site itself, which is good for speed.
+        </p>
+        <DelayedTools run={run} />
+      </div>
     );
   const max = Math.max(...tp.list.map((t) => Math.max(t.blockingMs, t.mainThreadMs)), 1);
   const optional = tp.list.filter((t) => !t.essential);
@@ -181,6 +211,8 @@ export function ThirdPartySection({ run }: { run: SpeedRun }) {
           )}
         </div>
       </div>
+
+      <DelayedTools run={run} />
 
       <div className="overflow-hidden rounded-xl border border-rule bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule bg-mist/40 px-4 py-2.5 text-xs text-ink-soft sm:px-5">

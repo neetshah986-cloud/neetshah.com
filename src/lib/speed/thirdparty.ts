@@ -2,6 +2,7 @@
 import { perfScore, type ScoreMetric } from "./lhscore";
 import type { MetricKey } from "./metrics";
 import type { MetricValue, Strategy } from "./types";
+import type { HtmlTag } from "./tags";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,6 +42,8 @@ export type ThirdPartyReport = {
   /** Estimated score if every non-essential third party waited until after load. */
   scoreIfDelayed: number | null;
   score: number | null;
+  /** Tools named in the page HTML that didn't download during the test (set to load later). */
+  delayed?: HtmlTag[];
 };
 
 const CATEGORY: Record<string, string> = {

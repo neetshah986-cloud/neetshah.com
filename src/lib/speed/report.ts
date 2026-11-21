@@ -3,6 +3,7 @@ import { buildDiagnoses, metricValue } from "./diagnose";
 import { buildFindings, getAttr, passedAudits, toNode, type Audit, type Ctx } from "./fixes";
 import { buildWaterfall } from "./waterfall";
 import { buildThirdParties } from "./thirdparty";
+import { notLoaded, type HtmlTag } from "./tags";
 import { addPlatformSteps, detectPlatform } from "./platform";
 import { rate, type MetricKey } from "./metrics";
 import type { CrawlerView, FieldData, FieldMetric, MetricValue, RunFacts, SpeedRun, Strategy } from "./types";
@@ -34,7 +35,7 @@ export function parseField(le: any, strategy: Strategy): FieldData | null {
   return { scope: le.origin_fallback || /^origin:/.test(le.id ?? "") ? "origin" : "url", metrics, passed };
 }
 
-export type RawHtml = { words: number; hasH1: boolean; title: string; appShell: boolean; hints?: string[]; error?: string };
+export type RawHtml = { words: number; hasH1: boolean; title: string; appShell: boolean; hints?: string[]; tags?: HtmlTag[]; error?: string };
 
 export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw?: RawHtml | null): SpeedRun {
   const lhr = psi.lighthouseResult ?? psi;
@@ -179,7 +180,7 @@ export function buildRun(psi: any, strategy: Strategy, requestedUrl: string, raw
       bytes: i.transferSize ?? 0,
       mainThreadMs: i.mainThreadTime ?? 0,
     })),
-    thirdParty: buildThirdParties(lhr, audits, lab, strategy),
+    thirdParty: { ...buildThirdParties(lhr, audits, lab, strategy), delayed: notLoaded(raw?.tags ?? [], requests.map((r) => String(r.url ?? ""))) },
     facts,
     crawler,
     waterfall: buildWaterfall(audits, origin, lcpUrl),

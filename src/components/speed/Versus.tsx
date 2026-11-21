@@ -155,7 +155,7 @@ export function VersusSection({ you, them, onFix }: { you: SpeedRun; them: Speed
       {(v.thirdParties.onlyYou.length > 0 || v.thirdParties.onlyThem.length > 0 || v.thirdParties.both.length > 0) && (
         <section>
           <h3 className="text-xl font-semibold tracking-tight">Outside scripts each page loads</h3>
-          <p className="mt-1 mb-4 text-[0.95rem] text-ink-soft">Tools your competitor manages without are the first ones to question.</p>
+          <p className="mt-1 mb-4 max-w-3xl text-[0.95rem] text-ink-soft">Scripts that downloaded during Google&apos;s test, so they affect the first load. Tools a page sets to load later are listed underneath, because they don&apos;t slow the first load.</p>
           <div className="grid gap-4 md:grid-cols-3">
             {(
               [
@@ -174,6 +174,22 @@ export function VersusSection({ you, them, onFix }: { you: SpeedRun; them: Speed
               </div>
             ))}
           </div>
+          {[
+            ["Your page", you],
+            [other, them],
+          ].map(([who, r]) => {
+            const d = (r as SpeedRun).thirdParty?.delayed ?? [];
+            if (!d.length) return null;
+            const shopify = d.some((t) => t.viaShopifyPixels);
+            return (
+              <p key={who as string} className="mt-3 flex gap-2 text-[0.93rem] leading-relaxed text-ink-soft">
+                <ToneIcon tone="good" className="mt-0.5 h-4 w-4" />
+                <span>
+                  <span className="font-medium text-ink">{who as string}</span> also has {d.length > 1 ? `${d.slice(0, -1).map((t) => t.name).join(", ")} and ${d.at(-1)!.name}` : d[0].name} in its code, set to load after the page{shopify ? " (through Shopify's Customer events)" : ""}.
+                </span>
+              </p>
+            );
+          })}
         </section>
       )}
 

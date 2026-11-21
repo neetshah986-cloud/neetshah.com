@@ -624,7 +624,7 @@ export function ReplaySection({ run, other }: { run: SpeedRun; other?: SpeedRun 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, speed, total]);
 
-  const name = `page-load-${run.finalUrl.replace(/^https?:\/\//, "").replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}${compare ? "-compare" : `-${run.strategy}`}`;
+  const name = `neetshah-page-load-${run.finalUrl.replace(/^https?:\/\/(www\.)?/, "").replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}${compare ? "-compare" : `-${run.strategy}`}`;
 
   function save(blob: Blob, ext: string) {
     const a = document.createElement("a");

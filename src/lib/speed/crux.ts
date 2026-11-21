@@ -97,7 +97,7 @@ function readMetric(k: TrendMetric["key"], p75: (number | null)[], ends: string[
   const rel = first.v ? change / first.v : 0;
 
   // Overall direction.
-  if (Math.abs(change) < STEP[k] / 2) out.push({ tone: nowRating === "good" ? "good" : "ni", text: `Steady at about ${f(last.v)} since ${fmtDate(ends[first.i])}.` });
+  if (Math.abs(change) < STEP[k] / 2) out.push({ tone: nowRating === "good" ? "good" : "ni", text: `Little overall change since ${fmtDate(ends[first.i])}: ${f(first.v)} then, ${f(last.v)} now.` });
   else
     out.push({
       tone: change < 0 ? "good" : "poor",
@@ -142,6 +142,9 @@ function readMetric(k: TrendMetric["key"], p75: (number | null)[], ends: string[
   const good = k === "CLS" ? 0.1 : ({ LCP: 2500, INP: 200, FCP: 1800, TTFB: 800 } as const)[k];
   if (nowRating === "ni" && last.v - good <= good * 0.12)
     out.push({ tone: "ni", text: `Only ${f(last.v - good)} above the good threshold (${k === "CLS" ? good : f(good)}). A small fix could tip it into good.` });
+  const poor = k === "CLS" ? 0.25 : ({ LCP: 4000, INP: 500, FCP: 3000, TTFB: 1800 } as const)[k];
+  if (nowRating === "ni" && poor - last.v <= poor * 0.06)
+    out.push({ tone: "poor", text: `Only ${f(poor - last.v)} away from poor (${k === "CLS" ? poor : f(poor)}). Any regression will tip it over.` });
   if (nowRating === "good" && good - last.v <= good * 0.08)
     out.push({ tone: "ni", text: `Good, but only ${f(good - last.v)} inside the threshold. A small regression would push it out.` });
   return out;

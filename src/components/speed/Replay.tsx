@@ -288,16 +288,24 @@ export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: numb
   const m0 = lanes[0].run.waterfall?.marks ?? {};
   ctx.font = `700 11px ${FONT}`;
   ctx.textAlign = "center";
-  for (const [k, v, col] of [
+  // Markers; ones that land within a few pixels share a label ("FCP + LCP").
+  const marks = ([
     ["FCP", m0.fcp, C.serp],
     ["LCP", m0.lcp, C.fail],
     ["Load", m0.load, C.soft],
-  ] as const) {
-    if (typeof v !== "number") continue;
+  ] as const).filter((x): x is readonly [string, number, string] => typeof x[1] === "number");
+  const groups: { x: number; label: string; color: string }[] = [];
+  for (const [k, v, col] of marks) {
     const mx = tx + (v / total) * tw;
     ctx.fillStyle = col;
     ctx.fillRect(mx - 1, ty - 6, 2, 18);
-    ctx.fillText(k, mx, ty - 10);
+    const near = groups.find((g) => Math.abs(g.x - mx) < 36);
+    if (near) near.label += ` + ${k}`;
+    else groups.push({ x: mx, label: k, color: col });
+  }
+  for (const g of groups) {
+    ctx.fillStyle = g.color;
+    ctx.fillText(g.label, g.x, ty - 10);
   }
   ctx.textAlign = "right";
   ctx.fillStyle = C.soft;

@@ -6,7 +6,7 @@ import type { RawHtml } from "./report";
 import type { Strategy } from "./types";
 
 const ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
-const TIMEOUT_MS = 110_000;
+const TIMEOUT_MS = 170_000;
 
 const LIGHTHOUSE_ERRORS: [RegExp, string][] = [
   [/NO_FCP/, "The page didn't show any content while Google was testing it. It may be blank, very slow, or blocking Google's test browser."],

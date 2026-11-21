@@ -782,11 +782,35 @@ export function PageSpeed() {
 
   async function runOne(strategy: Strategy, target: string, fresh: boolean) {
     setState((s) => ({ ...s, [strategy]: { loading: true } }));
-    try {
+    const post = async (fresh: boolean) => {
       const res = await fetch("/api/page-speed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: target, strategy, fresh }) });
-      const data = await res.json().catch(() => ({ error: "The test didn't return a result. Try again." }));
+      const data = await res.json().catch(() => null);
+      if (!data) throw new Error("The server didn't answer. Check your connection and try again.");
       if (!res.ok) throw new Error(data.error ?? "The test failed. Try again.");
-      setState((s) => ({ ...s, [strategy]: { loading: false, run: data as SpeedRun } }));
+      return data as { run?: SpeedRun; job?: string };
+    };
+    try {
+      let data = await post(fresh);
+      const deadline = Date.now() + 210_000;
+      let restarted = false;
+      // Google can take over a minute on heavy pages, so the test runs as a job and we check on it.
+      while (!data.run && data.job) {
+        if (Date.now() > deadline) throw new Error("Google is taking unusually long to test this page. Try again in a few minutes.");
+        await new Promise((r) => setTimeout(r, 3000));
+        const res = await fetch(`/api/page-speed?job=${encodeURIComponent(data.job)}`, { cache: "no-store" });
+        const poll = await res.json().catch(() => null);
+        if (!poll) continue; // a hiccup on one check: try the next one
+        if (res.status === 404 && !restarted) {
+          // The server restarted mid-test (for example during a deploy): start again once.
+          restarted = true;
+          data = await post(false);
+          continue;
+        }
+        if (!res.ok) throw new Error(poll.error === "lost" ? "The test was interrupted. Try again." : (poll.error ?? "The test failed. Try again."));
+        if (poll.run) data = { run: poll.run };
+      }
+      if (!data.run) throw new Error("The test didn't return a result. Try again.");
+      setState((s) => ({ ...s, [strategy]: { loading: false, run: data.run } }));
     } catch (e) {
       setState((s) => ({ ...s, [strategy]: { loading: false, error: e instanceof Error ? e.message : "The test failed. Try again." } }));
     }
@@ -848,7 +872,7 @@ export function PageSpeed() {
             {loading ? "Testing…" : "Test page speed"}
           </button>
         </form>
-        <p className="mt-3 text-sm text-ink-soft">Tests mobile and desktop at the same time on Google&apos;s servers. It usually takes 20 to 40 seconds.</p>
+        <p className="mt-3 text-sm text-ink-soft">Tests mobile and desktop at the same time on Google&apos;s servers. It usually takes 20 to 40 seconds, and up to two minutes for heavy pages.</p>
       </div>
 
       <div ref={resultsRef} className="scroll-mt-24">
@@ -891,6 +915,7 @@ export function PageSpeed() {
                       </li>
                     ))}
                   </ol>
+                  {elapsed > 45 && <p className="mt-4 text-sm text-ink-soft">This page is slow to test. Heavy pages can take Google up to two minutes, so keep this tab open.</p>}
                 </div>
               )}
               {current.error && !current.loading && (

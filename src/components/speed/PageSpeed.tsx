@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { devReport, findingText } from "@/lib/speed/devreport";
 import { formatBytes, formatMs, formatThreshold, METRICS, RATING_LABEL, thresholds, type MetricKey, type Rating } from "@/lib/speed/metrics";
 import type { CodeBlock, Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Strategy } from "@/lib/speed/types";
@@ -609,23 +609,60 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
   );
 }
 
-function RunView({ run }: { run: SpeedRun }) {
+export type ResultTab = "overview" | "causes" | "fixes" | "waterfall" | "trend" | "calculator" | "crawlers" | "weight";
+
+function RunView({ run, view, setView }: { run: SpeedRun; view: ResultTab; setView: (t: ResultTab) => void }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(run.findings.slice(0, 2).map((f) => f.id)));
-  const go = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
+  const barRef = useRef<HTMLDivElement>(null);
+  // Keep the active tab visible in the bar on narrow screens.
+  useEffect(() => {
+    const btn = document.getElementById(`rt-${run.strategy}-${view}`);
+    const list = btn?.parentElement;
+    if (btn && list) list.scrollTo({ left: btn.offsetLeft - list.clientWidth / 2 + btn.clientWidth / 2 });
+  }, [view, run.strategy]);
+  // Switch tab, then scroll to an element inside it once it has rendered.
+  const show = (t: ResultTab, anchor?: string) => {
+    setView(t);
+    setTimeout(() => {
+      const el = anchor ? document.getElementById(anchor) : null;
+      if (el) el.scrollIntoView({ block: "start" });
+      else if (barRef.current && barRef.current.getBoundingClientRect().top < 64) window.scrollTo(0, barRef.current.offsetTop - 64);
+    }, 30);
+  };
   const openFix = (id: string) => {
     setOpenIds((s) => new Set(s).add(id));
-    go(`fix-${run.strategy}-${id}`);
+    show("fixes", `fix-${run.strategy}-${id}`);
   };
   const toCause = (k: MetricKey) => {
     const target = run.diagnoses.find((d) => d.metric === k) ?? run.diagnoses.find((d) => d.metric === (k === "INP" ? "TBT" : k === "SI" ? "FCP" : k));
-    if (target) go(`cause-${run.strategy}-${target.metric}`);
+    show("causes", target ? `cause-${run.strategy}-${target.metric}` : undefined);
   };
   const cwv = run.field?.passed ?? run.originField?.passed ?? null;
   const problems = run.diagnoses.filter((d) => d.rating !== "good");
   const labKeys = (["LCP", "TBT", "CLS", "FCP", "SI", "TTFB"] as MetricKey[]).filter((k) => run.lab[k]);
+  const calcValues = useMemo(
+    () => (run.lab.FCP && run.lab.SI && run.lab.LCP && run.lab.TBT && run.lab.CLS ? { FCP: run.lab.FCP.value, SI: run.lab.SI.value, LCP: run.lab.LCP.value, TBT: run.lab.TBT.value, CLS: run.lab.CLS.value } : null),
+    [run],
+  );
+  const c = run.crawler;
+  const crawlerIssues = [typeof c.ttfbMs === "number" && c.ttfbMs > 800, !!c.appShell || (typeof c.rawWords === "number" && c.rawWords < 60), c.rawHasH1 === false, c.compressed === false, c.redirects > 0].filter(Boolean).length;
+  const wfBad = run.waterfall?.insights.filter((i) => i.tone !== "good").length ?? 0;
+  const highFixes = run.findings.filter((f) => f.impact === "high").length;
+  type Badge = { text: string; tone: "good" | "ni" | "poor" | "plain" } | null;
+  const tabs: { id: ResultTab; label: string; badge: Badge }[] = [
+    { id: "overview", label: "Overview", badge: cwv === null ? null : { text: cwv ? "CWV passed" : "CWV failed", tone: cwv ? "good" : "poor" } },
+    { id: "causes", label: "Root causes", badge: problems.length ? { text: String(problems.length), tone: problems.some((d) => d.rating === "poor") ? "poor" : "ni" } : { text: "0", tone: "good" } },
+    { id: "fixes", label: "Fixes", badge: run.findings.length ? { text: String(run.findings.length), tone: highFixes ? "poor" : "ni" } : { text: "0", tone: "good" } },
+    { id: "waterfall", label: "Waterfall", badge: run.waterfall?.rows.length ? { text: `${run.waterfall.rows.length} files`, tone: "plain" } : null },
+    { id: "trend", label: "Trend", badge: null },
+    { id: "calculator", label: "Score calculator", badge: null },
+    { id: "crawlers", label: "AI & crawlers", badge: { text: crawlerIssues ? String(crawlerIssues) : "OK", tone: crawlerIssues ? "ni" : "good" } },
+    { id: "weight", label: "Page weight", badge: { text: formatBytes(run.weight.reduce((a, w) => a + w.bytes, 0)), tone: "plain" } },
+  ];
+  void wfBad;
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-8">
       {/* Verdict */}
       <div className="flex flex-col gap-6 rounded-2xl border border-rule bg-white p-5 sm:flex-row sm:items-center sm:p-6">
         <ScoreRing score={run.score} />
@@ -669,108 +706,183 @@ function RunView({ run }: { run: SpeedRun }) {
         </div>
       </div>
 
-      <section>
-        <SectionTitle sub="What real Chrome visitors experienced. This is the data Google uses for Core Web Vitals in Search.">Real visitors (field data)</SectionTitle>
-        <FieldSection field={run.field} origin={run.originField} strategy={run.strategy} onWhy={toCause} />
-      </section>
-
-      <section>
-        <SectionTitle sub="Six months of weekly real-visitor data from the Chrome UX Report, with what changed and when.">Real-visitor trend</SectionTitle>
-        <TrendSection url={run.finalUrl} strategy={run.strategy} />
-      </section>
-
-      <section>
-        <SectionTitle sub={`One load in Google's lab on a ${run.strategy === "mobile" ? "mid-range phone with a slow 4G connection" : "desktop with a fast connection"}. Use it to find causes; numbers vary a little from run to run.`}>Lab test (this run)</SectionTitle>
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {labKeys.map((k) => (
-            <MetricCard key={k} m={run.lab[k]!} strategy={run.strategy} onWhy={() => toCause(k)} />
-          ))}
-        </ul>
-        <div className="mt-6">
-          <p className="mb-2 text-sm font-medium">How the page loaded</p>
-          <Filmstrip run={run} />
+      {/* Tabs */}
+      <div ref={barRef} className="sticky top-16 z-30 -mx-4 border-b border-rule bg-paper/95 px-4 backdrop-blur-md sm:mx-0 sm:px-0">
+        <div
+          role="tablist"
+          aria-label="Result sections"
+          className="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+            const ids = tabs.map((t) => t.id);
+            const next = ids[(ids.indexOf(view) + (e.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length];
+            setView(next);
+            requestAnimationFrame(() => document.getElementById(`rt-${run.strategy}-${next}`)?.focus());
+          }}
+        >
+          {tabs.map((t) => {
+            const active = view === t.id;
+            return (
+              <button
+                key={t.id}
+                id={`rt-${run.strategy}-${t.id}`}
+                role="tab"
+                aria-selected={active}
+                aria-controls={`rp-${run.strategy}`}
+                tabIndex={active ? 0 : -1}
+                onClick={() => show(t.id)}
+                className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-[0.93rem] font-medium transition-colors ${active ? "border-ink text-ink" : "border-transparent text-ink-soft hover:border-rule hover:text-ink"}`}
+              >
+                {t.label}
+                {t.badge && (
+                  <span className={`rounded-full px-1.5 py-px text-[0.7rem] font-semibold ${t.badge.tone === "poor" ? "bg-fail/10 text-fail" : t.badge.tone === "ni" ? "bg-warn/10 text-warn" : t.badge.tone === "good" ? "bg-pass/10 text-pass" : "bg-mist text-ink-soft"}`}>
+                    {t.badge.text}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </div>
 
-      {run.lab.FCP && run.lab.SI && run.lab.LCP && run.lab.TBT && run.lab.CLS && (
-        <section>
-          <SectionTitle sub="Your lab numbers, loaded into Lighthouse's own scoring formula. Move a slider to see what fixing that metric would do to the score.">What&apos;s each fix worth?</SectionTitle>
-          <ScoreCalculator
-            compact
-            device={run.strategy}
-            initial={{ FCP: run.lab.FCP.value, SI: run.lab.SI.value, LCP: run.lab.LCP.value, TBT: run.lab.TBT.value, CLS: run.lab.CLS.value }}
-          />
-        </section>
-      )}
-
-      <section>
-        <SectionTitle sub="The main cause behind each metric, worked out from Google's trace of the page load.">Root causes</SectionTitle>
-        <ul className="grid gap-4">
-          {run.diagnoses.map((d) => (
-            <DiagnosisCard key={d.metric} d={d} run={run} findings={run.findings} onOpen={openFix} />
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <SectionTitle sub="Ordered by how much each fix improves your Core Web Vitals. Open one to see the element, the current code and the fixed code.">
-          {run.findings.length ? `${run.findings.length} fixes, biggest impact first` : "No fixes needed"}
-        </SectionTitle>
-        {run.findings.length ? (
-          <ol className="grid gap-3">
-            {run.findings.map((f, i) => (
-              <FindingCard
-                key={f.id}
-                f={f}
-                n={i + 1}
-                run={run}
-                open={openIds.has(f.id)}
-                onToggle={(o) =>
-                  setOpenIds((s) => {
-                    const n = new Set(s);
-                    if (o) n.add(f.id);
-                    else n.delete(f.id);
-                    return n;
-                  })
-                }
-              />
-            ))}
-          </ol>
-        ) : (
-          <p className="text-ink-soft">Lighthouse found nothing worth fixing on this page.</p>
+      <div id={`rp-${run.strategy}`} role="tabpanel" aria-labelledby={`rt-${run.strategy}-${view}`} className="space-y-14">
+        {view === "overview" && (
+          <>
+            <section>
+              <SectionTitle sub="What real Chrome visitors experienced. This is the data Google uses for Core Web Vitals in Search.">Real visitors (field data)</SectionTitle>
+              <FieldSection field={run.field} origin={run.originField} strategy={run.strategy} onWhy={toCause} />
+            </section>
+            <section>
+              <SectionTitle sub={`One load in Google's lab on a ${run.strategy === "mobile" ? "mid-range phone with a slow 4G connection" : "desktop with a fast connection"}. Use it to find causes; numbers vary a little from run to run.`}>Lab test (this run)</SectionTitle>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {labKeys.map((k) => (
+                  <MetricCard key={k} m={run.lab[k]!} strategy={run.strategy} onWhy={() => toCause(k)} />
+                ))}
+              </ul>
+              <div className="mt-6">
+                <p className="mb-2 text-sm font-medium">How the page loaded</p>
+                <Filmstrip run={run} />
+              </div>
+            </section>
+            {run.findings.length > 0 && (
+              <section>
+                <SectionTitle sub="The fixes that will move your scores most. Each one has the element, the code and the steps.">Start here</SectionTitle>
+                <ol className="grid gap-2">
+                  {run.findings.slice(0, 3).map((f, i) => (
+                    <li key={f.id}>
+                      <button type="button" onClick={() => openFix(f.id)} className="flex w-full items-center gap-4 rounded-xl border border-rule bg-white px-4 py-3 text-left transition-colors hover:border-ink-soft">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold">{i + 1}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold leading-snug">{f.title}</span>
+                          <span className="mt-0.5 block text-sm text-ink-soft">{f.summary}</span>
+                        </span>
+                        <span className={`hidden shrink-0 rounded-md px-2 py-0.5 text-xs font-medium sm:inline ${IMPACT[f.impact].cls}`}>{IMPACT[f.impact].label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+                {run.findings.length > 3 && (
+                  <button type="button" onClick={() => show("fixes")} className="mt-3 text-sm font-medium text-serp hover:underline">
+                    See all {run.findings.length} fixes
+                  </button>
+                )}
+              </section>
+            )}
+          </>
         )}
-      </section>
 
-      {run.waterfall?.rows.length > 0 && (
-        <section>
-          <SectionTitle sub="Every file the page loaded, in order, and what the pattern says about why the page is slow.">Request waterfall</SectionTitle>
-          <WaterfallSection wf={run.waterfall} />
-        </section>
-      )}
+        {view === "causes" && (
+          <section>
+            <SectionTitle sub="The main cause behind each metric, worked out from Google's trace of the page load.">Root causes</SectionTitle>
+            <ul className="grid gap-4">
+              {run.diagnoses.map((d) => (
+                <DiagnosisCard key={d.metric} d={d} run={run} findings={run.findings} onOpen={openFix} />
+              ))}
+            </ul>
+          </section>
+        )}
 
-      <section>
-        <SectionTitle sub="Most AI crawlers, including the ones behind ChatGPT, Claude and Perplexity, read the raw HTML without running JavaScript. These checks show what they get.">Search and AI crawler view</SectionTitle>
-        <CrawlerPanel run={run} />
-      </section>
+        {view === "fixes" && (
+          <>
+            <section>
+              <SectionTitle sub="Ordered by how much each fix improves your Core Web Vitals. Open one to see the element, the current code and the fixed code.">
+                {run.findings.length ? `${run.findings.length} fixes, biggest impact first` : "No fixes needed"}
+              </SectionTitle>
+              {run.findings.length ? (
+                <ol className="grid gap-3">
+                  {run.findings.map((f, i) => (
+                    <FindingCard
+                      key={f.id}
+                      f={f}
+                      n={i + 1}
+                      run={run}
+                      open={openIds.has(f.id)}
+                      onToggle={(o) =>
+                        setOpenIds((s) => {
+                          const n = new Set(s);
+                          if (o) n.add(f.id);
+                          else n.delete(f.id);
+                          return n;
+                        })
+                      }
+                    />
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-ink-soft">Lighthouse found nothing worth fixing on this page.</p>
+              )}
+            </section>
+            {run.passed.length > 0 && (
+              <details className="rounded-xl border border-rule bg-white">
+                <summary className="cursor-pointer px-5 py-3.5 font-medium">{run.passed.length} checks passed</summary>
+                <ul className="grid gap-x-6 gap-y-1.5 border-t border-rule px-5 py-4 text-sm sm:grid-cols-2">
+                  {run.passed.map((p) => (
+                    <li key={p} className="flex gap-2">
+                      <RatingIcon r="good" className="mt-0.5 h-3.5 w-3.5" />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        )}
 
-      <section>
-        <SectionTitle>What the page is made of</SectionTitle>
-        <WeightPanel run={run} />
-      </section>
+        {view === "waterfall" && (
+          <section>
+            <SectionTitle sub="Every file the page loaded, in order, and what the pattern says about why the page is slow.">Request waterfall</SectionTitle>
+            {run.waterfall?.rows.length ? <WaterfallSection wf={run.waterfall} /> : <p className="text-ink-soft">Google didn&apos;t return the list of requests for this test.</p>}
+          </section>
+        )}
 
-      {run.passed.length > 0 && (
-        <details className="rounded-xl border border-rule bg-white">
-          <summary className="cursor-pointer px-5 py-3.5 font-medium">{run.passed.length} checks passed</summary>
-          <ul className="grid gap-x-6 gap-y-1.5 border-t border-rule px-5 py-4 text-sm sm:grid-cols-2">
-            {run.passed.map((p) => (
-              <li key={p} className="flex gap-2">
-                <RatingIcon r="good" className="mt-0.5 h-3.5 w-3.5" />
-                {p}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+        {view === "trend" && (
+          <section>
+            <SectionTitle sub="Six months of weekly real-visitor data from the Chrome UX Report, with what changed and when.">Real-visitor trend</SectionTitle>
+            <TrendSection url={run.finalUrl} strategy={run.strategy} />
+          </section>
+        )}
+
+        {view === "calculator" && (
+          <section>
+            <SectionTitle sub="Your lab numbers, loaded into Lighthouse's own scoring formula. Move a slider to see what fixing that metric would do to the score.">What&apos;s each fix worth?</SectionTitle>
+            {calcValues ? <ScoreCalculator compact device={run.strategy} initial={calcValues} /> : <p className="text-ink-soft">This test didn&apos;t return all five lab metrics, so the score can&apos;t be recalculated.</p>}
+          </section>
+        )}
+
+        {view === "crawlers" && (
+          <section>
+            <SectionTitle sub="Most AI crawlers, including the ones behind ChatGPT, Claude and Perplexity, read the raw HTML without running JavaScript. These checks show what they get.">Search and AI crawler view</SectionTitle>
+            <CrawlerPanel run={run} />
+          </section>
+        )}
+
+        {view === "weight" && (
+          <section>
+            <SectionTitle sub="Every file type the page downloads, and the third parties it loads code from.">What the page is made of</SectionTitle>
+            <WeightPanel run={run} />
+          </section>
+        )}
+      </div>
 
       <p className="text-sm text-ink-soft">
         Tested {new Date(run.fetchedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} with Lighthouse {run.lighthouseVersion} on Google&apos;s PageSpeed Insights servers.
@@ -789,6 +901,7 @@ type State = { run?: SpeedRun; error?: string; loading: boolean };
 export function PageSpeed() {
   const [url, setUrl] = useState("");
   const [tab, setTab] = useState<Strategy>("mobile");
+  const [view, setView] = useState<ResultTab>("overview");
   const [state, setState] = useState<Record<Strategy, State>>({ mobile: { loading: false }, desktop: { loading: false } });
   const [started, setStarted] = useState<number | null>(null);
   const [now, setNow] = useState(0);
@@ -840,6 +953,7 @@ export function PageSpeed() {
   function run(target = url, fresh = false) {
     if (!target.trim()) return;
     const t = Date.now();
+    setView("overview");
     setStarted(t);
     setNow(t);
     const u = new URL(window.location.href);
@@ -945,7 +1059,7 @@ export function PageSpeed() {
                   {current.error}
                 </p>
               )}
-              {current.run && !current.loading && <RunView key={current.run.fetchedAt + tab} run={current.run} />}
+              {current.run && !current.loading && <RunView key={current.run.fetchedAt + tab} run={current.run} view={view} setView={setView} />}
             </div>
           </div>
         )}

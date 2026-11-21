@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { Byline, LinkedInLink } from "@/components/Person";
-import { PageSpeed } from "@/components/speed/PageSpeed";
+import { SpeedTool } from "@/components/speed/SpeedTool";
 import { ScoreCalculator } from "@/components/speed/ScoreCalculator";
 import { person, personJsonLd, site } from "@/lib/site";
 
-const UPDATED = "2026-11-21T16:45:00+05:30";
+const UPDATED = "2026-11-21T19:00:00+05:30";
 const URL = `${site.url}/tools/page-speed-test`;
 const TITLE = "Page Speed Test: Core Web Vitals Checker With Fixes";
 
@@ -120,6 +120,64 @@ const ScriptsExample = () => (
         </li>
       ))}
     </ul>
+  </Panel>
+);
+
+const LeaderboardExample = () => (
+  <Panel label="Speed leaderboard for one keyword, mobile">
+    <ol className="space-y-1.5 text-sm">
+      {[
+        ["1", "competitor-a.com", "Passed", "text-pass", "88"],
+        ["2", "competitor-b.com", "Passed", "text-pass", "71"],
+        ["3", "Your page", "Failed", "text-fail", "46"],
+        ["4", "competitor-c.com", "Failed", "text-fail", "39"],
+      ].map(([n, who, cwv, c, score]) => (
+        <li key={n} className={`grid grid-cols-[1.25rem_minmax(0,1fr)_4rem_2rem] items-center gap-2 rounded px-2 py-1 ${who === "Your page" ? "bg-serp/[0.07] font-medium" : ""}`}>
+          <span className="font-semibold">{n}</span>
+          <span className="truncate">{who}</span>
+          <span className={c}>{cwv}</span>
+          <span className="text-right font-semibold">{score}</span>
+        </li>
+      ))}
+    </ol>
+    <p className="mt-3 text-sm text-ink-soft">What puts you behind the leader: real visitors see their main content 1.6 s sooner, and their main image starts downloading 1.1 s earlier.</p>
+  </Panel>
+);
+
+const PageTypesExample = () => (
+  <Panel label="Templates compared, slowest first">
+    <ul className="divide-y divide-rule text-sm">
+      {[
+        ["Product pages", "LCP 4.9 s", "text-fail", "31"],
+        ["Category pages", "LCP 3.2 s", "text-warn", "58"],
+        ["Blog posts", "LCP 1.9 s", "text-pass", "92"],
+      ].map(([t, lcp, c, s]) => (
+        <li key={t} className="flex items-center justify-between gap-3 py-2">
+          <span className="font-medium">{t}</span>
+          <span className="flex items-center gap-4">
+            <span className={c}>{lcp}</span>
+            <span className="w-6 text-right font-semibold">{s}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+    <p className="mt-2 rounded bg-mist/70 px-3 py-2 text-sm">Fix first: the product image carousel loads lazily. Found on 2 of 2 product pages tested.</p>
+  </Panel>
+);
+
+const GscExample = () => (
+  <Panel label="Search Console LCP issue, mobile">
+    <ul className="space-y-2 text-sm">
+      <li className="rounded border border-rule px-3 py-2">
+        <span className="block text-ink-soft">Group of 1,240 similar URLs, LCP 3.4 s</span>
+        <span className="block font-medium">Cause: the main image starts downloading late (loading=&quot;lazy&quot;).</span>
+      </li>
+      <li className="rounded border border-rule px-3 py-2">
+        <span className="block text-ink-soft">Group of 310 similar URLs, LCP 2.9 s</span>
+        <span className="block font-medium">Cause: 4 render-blocking files hold back the paint.</span>
+      </li>
+    </ul>
+    <p className="mt-2 text-sm text-ink-soft">Fixes that help several groups at once are listed first.</p>
   </Panel>
 );
 
@@ -329,6 +387,33 @@ const features = [
     Example: ScriptsExample,
   },
   {
+    id: "leaderboard",
+    title: "Rank your page against the pages above you in Google",
+    body: [
+      "Add your page and up to five competitors ranking for the same keyword, and every page is tested at once. They're ranked the way Google judges speed: pages that pass Core Web Vitals with real visitors first, then the lab score.",
+      "The table shows each page's real-visitor LCP, INP and CLS, lab metrics, page weight and main weakness in a sentence. Above it, the reasons you're behind the leader, each with what to change. Sort by any column, compare any page head to head, and download the table as CSV for a client report.",
+    ],
+    Example: LeaderboardExample,
+  },
+  {
+    id: "page-types",
+    title: "Find which template is slow: home, category, product or blog",
+    body: [
+      "Enter a website and the tool reads its sitemap, groups the URLs by page type, and tests a couple of pages from each. Shopify, WordPress and SEO-plugin sitemaps are split by type already; for other sites the URL paths are used, and you can paste your own list.",
+      "You get the templates side by side, slowest first, and for each one the fixes that appear on most of its pages. Those are template problems: one change in the theme or the code fixes them on every page of that type.",
+    ],
+    Example: PageTypesExample,
+  },
+  {
+    id: "search-console",
+    title: "Turn a Search Console Core Web Vitals issue into fixes",
+    body: [
+      "Search Console tells you which groups of URLs are poor, but not why. Export an issue (for example \"LCP issue: longer than 2.5 s\") and upload the ZIP. The tool reads the example URL of each group, with the group's value and size, and tests them, biggest groups first.",
+      "For each group you get the real-visitor value now, the cause of that metric and the fixes for it, plus the fixes that help several groups at once. When a group's URL is already in the good range, it says so, so you know when to click Validate fix. The file is read in your browser and never uploaded.",
+    ],
+    Example: GscExample,
+  },
+  {
     id: "competitor",
     title: "Compare your page with a competitor's, and see why one is faster",
     body: [
@@ -412,6 +497,9 @@ const comparison: { label: string; us: string; psi: string }[] = [
   { label: "Raw HTML check for crawlers that don't run JavaScript", us: "Yes", psi: "No" },
   { label: "Copy-ready report for a developer", us: "Yes", psi: "No" },
   { label: "Compare with a competitor's page, with the reasons one is faster", us: "Yes", psi: "No" },
+  { label: "Rank up to 6 pages for one keyword by Core Web Vitals and speed", us: "Yes", psi: "No" },
+  { label: "Test a site by page type from its sitemap, with template-level fixes", us: "Yes", psi: "No" },
+  { label: "Read a Search Console Core Web Vitals export and find each group's cause", us: "Yes", psi: "No" },
   { label: "Before and after check when you test again", us: "Yes", psi: "No" },
   { label: "Third parties by company, with the score each one costs", us: "Yes", psi: "Lists third parties and their time" },
   { label: "Score calculator with your results and the quickest route to 90", us: "Yes", psi: "Links to Google's calculator, no route to 90" },
@@ -464,7 +552,15 @@ const faqs = [
   },
   {
     q: "How do I compare my page speed with a competitor's?",
-    a: "Click \"Compare with a competitor\" under the URL box, add their page, and run the test. Compare similar pages, such as your product page against theirs. The head-to-head view shows who's faster on mobile and desktop and why, and the reasons where you're behind link straight to the fixes. You can share the comparison: the link includes both URLs.",
+    a: "Click \"Compare with a competitor\" under the URL box, add their page, and run the test. Compare similar pages, such as your product page against theirs. The head-to-head view shows who's faster on mobile and desktop and why, and the reasons where you're behind link straight to the fixes. To compare against several pages ranking for the same keyword, use the Speed leaderboard tab. Both can be shared: the link includes the URLs.",
+  },
+  {
+    q: "How do I check the page speed of a whole website?",
+    a: "Use the Page types tab. Enter the site and the tool reads its sitemap, groups the pages into templates (home, category, product, blog and others) and tests a couple from each. Google groups similar pages in the same way in Search Console, so the slowest template is usually the one to fix first.",
+  },
+  {
+    q: "How do I fix Core Web Vitals issues reported in Search Console?",
+    a: "Open the issue in Search Console's Core Web Vitals report, export it as CSV and upload the ZIP in the Search Console tab. The tool tests the example URL of each group and gives the cause and fixes for that metric. Once the fix is live, click Validate fix in Search Console; it takes about 28 days of new visitor data to confirm.",
   },
   {
     q: "How do I know if a speed fix worked?",
@@ -596,7 +692,7 @@ export default function PageSpeedTestPage() {
           ))}
         </ul>
         <div className="mt-10">
-          <PageSpeed />
+          <SpeedTool />
         </div>
       </section>
 

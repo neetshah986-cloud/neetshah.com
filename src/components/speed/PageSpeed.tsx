@@ -7,6 +7,7 @@ import type { Diagnosis, FieldData, Finding, MetricValue, NodeRef, SpeedRun, Str
 import { ReplaySection } from "./Replay";
 import { ScoreCalculator } from "./ScoreCalculator";
 import { prefetchTrend, TrendSection } from "./Trend";
+import { fetchRun } from "@/lib/speed/client";
 import { WaterfallSection } from "./Waterfall";
 import { FixCheckCard } from "./FixCheck";
 import { ThirdPartySection } from "./ThirdParty";
@@ -580,7 +581,7 @@ type RunViewProps = {
   focusAudit?: string;
 };
 
-function RunView({ run, other, view, setView, earlier, onRetest, onForget, focusAudit }: RunViewProps) {
+export function RunView({ run, other, view, setView, earlier, onRetest, onForget, focusAudit }: RunViewProps) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => {
     const focused = run.findings.find((x) => x.auditId === focusAudit);
     return new Set([...run.findings.slice(0, 2).map((f) => f.id), ...(focused ? [focused.id] : [])]);
@@ -987,36 +988,10 @@ export function PageSpeed() {
   async function runOne(who: Who, strategy: Strategy, target: string, fresh: boolean) {
     const set = (st: State) => (who === "you" ? setState((s) => ({ ...s, [strategy]: st })) : setComp((s) => ({ ...(s ?? EMPTY), [strategy]: st })));
     set({ loading: true });
-    const post = async (fresh: boolean) => {
-      const res = await fetch("/api/page-speed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: target, strategy, fresh }) });
-      const data = await res.json().catch(() => null);
-      if (!data) throw new Error("The server didn't answer. Check your connection and try again.");
-      if (!res.ok) throw new Error(data.error ?? "The test failed. Try again.");
-      return data as { run?: SpeedRun; job?: string };
-    };
     try {
-      let data = await post(fresh);
-      const deadline = Date.now() + 210_000;
-      let restarted = false;
-      // Google can take over a minute on heavy pages, so the test runs as a job and we check on it.
-      while (!data.run && data.job) {
-        if (Date.now() > deadline) throw new Error("Google is taking unusually long to test this page. Try again in a few minutes.");
-        await new Promise((r) => setTimeout(r, 2500));
-        const res = await fetch(`/api/page-speed?job=${encodeURIComponent(data.job)}`, { cache: "no-store" });
-        const poll = await res.json().catch(() => null);
-        if (!poll) continue; // a hiccup on one check: try the next one
-        if (res.status === 404 && !restarted) {
-          // The server restarted mid-test (for example during a deploy): start again once.
-          restarted = true;
-          data = await post(false);
-          continue;
-        }
-        if (!res.ok) throw new Error(poll.error === "lost" ? "The test was interrupted. Try again." : (poll.error ?? "The test failed. Try again."));
-        if (poll.run) data = { run: poll.run };
-      }
-      if (!data.run) throw new Error("The test didn't return a result. Try again.");
-      prefetchTrend(data.run.finalUrl, strategy);
-      set({ loading: false, run: data.run, earlier: remember(data.run) });
+      const run = await fetchRun(target, strategy, fresh);
+      prefetchTrend(run.finalUrl, strategy);
+      set({ loading: false, run, earlier: remember(run) });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : "The test failed. Try again." });
     }
@@ -1065,7 +1040,7 @@ export function PageSpeed() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const shared = q.get("url");
-    if (!shared) return;
+    if (!shared || q.get("mode")) return;
     const vs = q.get("vs") ?? "";
     const t = setTimeout(() => {
       setUrl(shared);

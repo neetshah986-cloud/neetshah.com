@@ -42,9 +42,9 @@ export async function assertPublicUrl(url: URL) {
   if (!addresses.length || addresses.some(isPrivateIp)) throw new FetchError("That address is on a private network, so it can't be checked from here.");
 }
 
-export type FetchedPage = { finalUrl: string; status: number; html: string; bytes: number; ms: number; redirects: string[] };
+export type FetchedPage = { finalUrl: string; status: number; html: string; bytes: number; ms: number; redirects: string[]; body?: Uint8Array; type?: string };
 
-export async function fetchPage(input: string, opts: { accept?: "html" | "script" | "json"; timeoutMs?: number } = {}): Promise<FetchedPage> {
+export async function fetchPage(input: string, opts: { accept?: "html" | "script" | "json" | "any"; timeoutMs?: number } = {}): Promise<FetchedPage> {
   const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   if (/^[a-z][a-z0-9+.-]*:/i.test(input.trim()) && !/^https?:\/\//i.test(input.trim()))
     throw new FetchError("Only http:// and https:// URLs can be checked.");
@@ -82,7 +82,7 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
 
     const type = res.headers.get("content-type") ?? "";
     const okType = opts.accept === "script" ? /javascript|ecmascript|text\/plain/i : opts.accept === "json" ? /json/i : /html|xml/i;
-    if (type && !okType.test(type)) throw new FetchError(`That URL returned ${type.split(";")[0]}, not an HTML page.`, 422);
+    if (type && opts.accept !== "any" && !okType.test(type)) throw new FetchError(`That URL returned ${type.split(";")[0]}, not an HTML page.`, 422);
 
     const reader = res.body?.getReader();
     const chunks: Uint8Array[] = [];
@@ -118,7 +118,7 @@ export async function fetchPage(input: string, opts: { accept?: "html" | "script
       buf.set(c, off);
       off += c.byteLength;
     }
-    return { finalUrl: url.href, status: res.status, html: decoder.decode(buf), bytes, ms: Date.now() - started, redirects };
+    return { finalUrl: url.href, status: res.status, html: decoder.decode(buf), bytes, ms: Date.now() - started, redirects, body: opts.accept === "any" ? buf : undefined, type };
   }
   throw new FetchError(`The URL redirected more than ${MAX_REDIRECTS} times.`, 508);
 }

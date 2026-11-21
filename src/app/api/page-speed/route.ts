@@ -50,7 +50,7 @@ function ipOf(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (rateLimited(`speed:${ipOf(request)}`, 24)) return Response.json({ error: "Too many tests in a minute. Wait a moment and try again." }, { status: 429 });
+  if (rateLimited(`speed:${ipOf(request)}`, 40)) return Response.json({ error: "Too many tests in a minute. Wait a moment and try again." }, { status: 429 });
 
   let body: { url?: string; strategy?: string; fresh?: boolean };
   try {

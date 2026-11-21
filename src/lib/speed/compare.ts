@@ -145,6 +145,35 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
   };
   const better = (side: "you" | "them") => (side === "you" ? yName : tName);
   const worse = (side: "you" | "them") => (side === "you" ? tName : yName);
+  // Real visitors first: it's the data Google uses in Search.
+  if (yf && tf) {
+    const FIELD: { k: MetricKey; min: number; scale: number; text: (better: string, a: string, b: string) => string; fix: string; ids: string[] }[] = [
+      { k: "LCP", min: 300, scale: 400, text: (n, a, b) => `Real visitors see ${n}'s main content sooner (LCP ${a} against ${b})`, fix: "See the lab causes for LCP below: server time, when the main image starts downloading, its size, and render-blocking files.", ids: ["lcp-breakdown-insight", "lcp-discovery-insight", "image-delivery-insight"] },
+      { k: "INP", min: 50, scale: 80, text: (n, a, b) => `${cap(n)} responds faster to taps and clicks for real visitors (INP ${a} against ${b})`, fix: "Cut and delay JavaScript, especially third-party scripts, and break up long tasks so the page can respond.", ids: ["bootup-time", "third-parties-insight", "unused-javascript"] },
+      { k: "CLS", min: 0.03, scale: 0.05, text: (n, a, b) => `Real visitors see less layout movement on ${n} (CLS ${a} against ${b})`, fix: "Reserve space for images, ads and banners, and match fallback fonts to web fonts.", ids: ["cls-culprits-insight", "unsized-images"] },
+    ];
+    for (const f of FIELD) {
+      const a = yf.metrics[f.k];
+      const b = tf.metrics[f.k];
+      if (!a || !b) continue;
+      const diff = a.value - b.value;
+      const bandsDiffer = a.rating !== b.rating;
+      if (Math.abs(diff) < f.min && !bandsDiffer) continue;
+      if (Math.abs(diff) < f.min / 3) continue;
+      const side: "you" | "them" = diff > 0 ? "them" : "you";
+      const win = side === "you" ? a : b;
+      const lose = side === "you" ? b : a;
+      reasons.push({
+        side,
+        weight: (bandsDiffer ? 3 : 1) + Math.abs(diff) / f.scale,
+        title: cap(f.text(better(side), win.display, lose.display)),
+        detail: `This is the 28-day real-visitor data Google uses for Core Web Vitals in Search.${bandsDiffer ? ` ${cap(better(side))}'s value is ${win.rating === "good" ? "in Google's good range" : "closer to Google's good range"}; ${worse(side)}'s ${lose.rating === "poor" ? "is poor" : "needs improvement"}.` : ""}`,
+        fix: f.fix,
+        auditIds: f.ids,
+      });
+    }
+  }
+
   const yLcp = you.lab.LCP?.value;
   const tLcp = them.lab.LCP?.value;
   if (yLcp !== undefined && tLcp !== undefined)
@@ -291,7 +320,7 @@ export function compareRuns(you: SpeedRun, them: SpeedRun): Versus {
   const device = you.strategy === "mobile" ? "mobile" : "desktop";
   const lcpA = you.lab.LCP;
   const lcpB = them.lab.LCP;
-  const lcpText = lcpA && lcpB ? `, main content at ${winner === "them" ? lcpB.display : lcpA.display} against ${winner === "them" ? lcpA.display : lcpB.display}` : "";
+  const lcpText = lcpA && lcpB && lcpA.display !== lcpB.display ? `, main content at ${winner === "them" ? lcpB.display : lcpA.display} against ${winner === "them" ? lcpA.display : lcpB.display}` : "";
   const headline =
     winner === "tie"
       ? `It's close on ${device}: score ${you.score} against ${them.score}.`

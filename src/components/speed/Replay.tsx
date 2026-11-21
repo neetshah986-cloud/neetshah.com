@@ -118,198 +118,446 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.roundRect(x, y, w, h, r);
 }
 
+type Phase = { key: "server" | "blank" | "painting" | "finishing" | "done"; label: string; color: string; glow: string };
+
+function phaseAt(l: Lane, t: number): Phase {
+  const m = l.run.waterfall?.marks ?? {};
+  if (m.htmlEnd && t < m.htmlEnd) return { key: "server", label: "Waiting for the server", color: C.warn, glow: "184,110,0" };
+  if (m.fcp && t < m.fcp) return { key: "blank", label: "Blank screen", color: C.warn, glow: "184,110,0" };
+  if (m.lcp && t < m.lcp) return { key: "painting", label: "Content appearing", color: C.serp, glow: "26,63,214" };
+  if (m.load && t < m.load) return { key: "finishing", label: "Main content visible", color: C.serp, glow: "26,63,214" };
+  return { key: "done", label: "Loaded", color: C.pass, glow: "11,138,87" };
+}
+
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 4 && ctx.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
+  return `${s}…`;
+}
+
+function drawLogo(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const k = size / 28;
+  ctx.fillStyle = "#1B2A40";
+  roundRect(ctx, x, y, size, size, 7 * k);
+  ctx.fill();
+  ctx.fillStyle = "#6F8CFF";
+  roundRect(ctx, x + 6 * k, y + 8 * k, 16 * k, 3 * k, 1.5 * k);
+  ctx.fill();
+  ctx.fillStyle = "#8A9AB2";
+  roundRect(ctx, x + 6 * k, y + 14 * k, 12 * k, 2 * k, 1 * k);
+  ctx.fill();
+  roundRect(ctx, x + 6 * k, y + 18.5 * k, 9 * k, 2 * k, 1 * k);
+  ctx.fill();
+}
+
+/** Draws the screen content (snapshot plus overlays) into a rectangle. */
+function drawScreen(ctx: CanvasRenderingContext2D, l: Lane, t: number, x: number, y: number, w: number, h: number, radius: number) {
+  ctx.save();
+  roundRect(ctx, x, y, w, h, radius);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.clip();
+  const img = frameAt(l, t);
+  if (img) {
+    // cover the screen width, top-aligned (a page is read from the top)
+    const ih = (img.naturalHeight / img.naturalWidth) * w;
+    ctx.drawImage(img, x, y, w, ih);
+  } else {
+    ctx.fillStyle = "#F4F6FA";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = C.soft;
+    ctx.font = `500 15px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.fillText("Nothing on screen yet", x + w / 2, y + h / 2);
+    ctx.textAlign = "left";
+  }
+  const layoutW = l.run.fullPage?.width ?? l.run.viewport.width;
+  const s = w / layoutW;
+  const m = l.run.waterfall?.marks ?? {};
+  const box = (r: Rect, color: string, label: string, dashed = false) => {
+    if (r.top * s > h - 10) return;
+    const bx = x + r.left * s;
+    const by = y + r.top * s;
+    const bw = Math.min(r.width * s, w - r.left * s);
+    const bh = Math.min(r.height * s, h - r.top * s);
+    ctx.save();
+    ctx.fillStyle = color === C.serp ? "rgba(26,63,214,0.08)" : "rgba(196,43,28,0.08)";
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    if (dashed) ctx.setLineDash([8, 6]);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+    ctx.font = `700 12px ${FONT}`;
+    const tw = ctx.measureText(label).width + 12;
+    const ly = by - 20 < y ? by + 2 : by - 20;
+    ctx.fillStyle = color;
+    roundRect(ctx, bx, ly, tw, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, bx + 6, ly + 13);
+    ctx.restore();
+  };
+  if (l.lcpRect && m.lcp && t >= m.lcp) box(l.lcpRect, C.serp, "LCP element");
+  if (m.load && t >= m.load) l.shifted.forEach((r) => box(r, C.fail, "Moved", true));
+  ctx.restore();
+}
+
+function drawPhone(ctx: CanvasRenderingContext2D, l: Lane, t: number, cx: number, top: number, maxH: number, maxW: number) {
+  const sample = l.frames[0]?.img ?? l.final;
+  const aspect = sample ? sample.naturalWidth / sample.naturalHeight : 0.5;
+  const bezel = 10;
+  let sh = maxH - bezel * 2;
+  let sw = sh * aspect;
+  if (sw + bezel * 2 > maxW) {
+    sw = maxW - bezel * 2;
+    sh = sw / aspect;
+  }
+  const ow = sw + bezel * 2;
+  const oh = sh + bezel * 2;
+  const x = cx - ow / 2;
+  ctx.save();
+  ctx.shadowColor = "rgba(14,26,43,0.25)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 12;
+  ctx.fillStyle = C.ink;
+  roundRect(ctx, x, top, ow, oh, 30);
+  ctx.fill();
+  ctx.restore();
+  drawScreen(ctx, l, t, x + bezel, top + bezel, sw, sh, 22);
+  ctx.fillStyle = C.ink;
+  roundRect(ctx, cx - 28, top + bezel + 6, 56, 14, 7);
+  ctx.fill();
+  return { x, w: ow, h: oh };
+}
+
+function drawBrowser(ctx: CanvasRenderingContext2D, l: Lane, t: number, cx: number, top: number, maxH: number, maxW: number) {
+  const sample = l.frames[0]?.img ?? l.final;
+  const aspect = sample ? sample.naturalWidth / sample.naturalHeight : 1.6;
+  const bar = 30;
+  let sw = maxW;
+  let sh = sw / aspect;
+  if (sh + bar > maxH) {
+    sh = maxH - bar;
+    sw = sh * aspect;
+  }
+  const x = cx - sw / 2;
+  ctx.save();
+  ctx.shadowColor = "rgba(14,26,43,0.22)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 12;
+  ctx.fillStyle = "#E7ECF3";
+  roundRect(ctx, x, top, sw, sh + bar, 12);
+  ctx.fill();
+  ctx.restore();
+  ["#E06656", "#E9B44C", "#5DBB79"].forEach((c, k) => {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(x + 16 + k * 16, top + bar / 2, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = "#fff";
+  const pillX = x + 70;
+  roundRect(ctx, pillX, top + 6, sw - 84, bar - 12, 9);
+  ctx.fill();
+  ctx.fillStyle = C.soft;
+  ctx.font = `500 11px ${FONT}`;
+  ctx.fillText(fitText(ctx, l.run.finalUrl.replace(/^https?:\/\//, ""), sw - 104), pillX + 10, top + bar / 2 + 4);
+  ctx.save();
+  roundRect(ctx, x, top + bar, sw, sh, 0);
+  ctx.restore();
+  drawScreen(ctx, l, t, x, top + bar, sw, sh, 0);
+  // round the bottom corners back over the screen
+  ctx.strokeStyle = "#E7ECF3";
+  ctx.lineWidth = 2;
+  roundRect(ctx, x, top, sw, sh + bar, 12);
+  ctx.stroke();
+  return { x, w: sw, h: sh + bar };
+}
+
 export function drawReplay(ctx: CanvasRenderingContext2D, lanes: Lane[], t: number, total: number) {
+  const compare = lanes.length > 1;
+  const lead = lanes[0];
+  const phase = phaseAt(lead, t);
+
+  // Background with a glow that follows the loading phase
   ctx.fillStyle = C.paper;
   ctx.fillRect(0, 0, W, H);
-  const panelX = W - 400;
-  const areaW = panelX - 70;
-  const areaTop = 60;
-  const areaH = H - areaTop - 70;
+  const areaRight = 820;
+  const g = ctx.createRadialGradient(areaRight / 2, 330, 40, areaRight / 2, 330, 460);
+  g.addColorStop(0, `rgba(${phase.glow},0.16)`);
+  g.addColorStop(1, `rgba(${phase.glow},0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 64, areaRight + 100, H - 64);
+  // faint dot grid
+  ctx.fillStyle = "rgba(14,26,43,0.06)";
+  for (let gx = 20; gx < W; gx += 28) for (let gy = 84; gy < H - 70; gy += 28) ctx.fillRect(gx, gy, 2, 2);
+
+  // Brand header
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(0, 0, W, 64);
+  drawLogo(ctx, 28, 16, 32);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#fff";
+  ctx.font = `700 22px ${FONT}`;
+  ctx.fillText("neetshah.com", 72, 40);
+  const bw = ctx.measureText("neetshah.com").width;
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.fillRect(72 + bw + 14, 22, 1.5, 22);
+  ctx.fillStyle = "#C9D3E3";
+  ctx.font = `500 20px ${FONT}`;
+  ctx.fillText("Page Speed Test", 72 + bw + 30, 40);
+  ctx.font = `500 15px ${FONT}`;
+  const tested = `${compare ? "Mobile and desktop" : lead.label} test of ${lead.run.finalUrl.replace(/^https?:\/\//, "")}`;
+  const tt = fitText(ctx, tested, 520);
+  const tw = ctx.measureText(tt).width;
+  ctx.fillStyle = "rgba(255,255,255,0.1)";
+  roundRect(ctx, W - 28 - tw - 28, 17, tw + 28, 30, 15);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText(tt, W - 28 - tw - 14, 37);
 
   // Devices
-  const gap = 40;
-  const slotW = (areaW - gap * (lanes.length - 1)) / lanes.length;
-  lanes.forEach((l, k) => {
-    const sample = l.frames[0]?.img ?? l.final;
-    const aspect = sample ? sample.naturalWidth / sample.naturalHeight : 0.5;
-    let h = areaH - 28;
-    let w = h * aspect;
-    if (w > slotW) {
-      w = slotW;
-      h = w / aspect;
-    }
-    const x = 40 + k * (slotW + gap) + (slotW - w) / 2;
-    const y = areaTop + 28;
-    ctx.fillStyle = C.ink;
-    ctx.font = `600 18px ${FONT}`;
-    ctx.textAlign = "left";
-    ctx.fillText(lanes.length > 1 ? `${l.label}  ${formatMs(Math.min(t, l.end - 400))}` : l.label, x, areaTop + 14);
-    // frame
-    ctx.save();
-    roundRect(ctx, x, y, w, h, 12);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
-    ctx.clip();
-    const img = frameAt(l, t);
-    if (img) ctx.drawImage(img, x, y, w, h);
-    else {
-      ctx.fillStyle = C.soft;
-      ctx.font = `500 15px ${FONT}`;
+  const top = 92;
+  const deviceH = compare ? 520 : 440;
+  if (compare) {
+    lanes.forEach((l, k) => {
+      const cx = k === 0 ? 200 : 590;
+      const isPhone = l.run.strategy === "mobile";
+      ctx.fillStyle = C.ink;
+      ctx.font = `600 16px ${FONT}`;
       ctx.textAlign = "center";
-      ctx.fillText("Blank screen", x + w / 2, y + h / 2);
+      ctx.fillText(`${l.label}`, cx, top + 4);
       ctx.textAlign = "left";
-    }
-    // overlays, in page CSS pixels scaled to the frame
-    const layoutW = l.run.fullPage?.width ?? l.run.viewport.width;
-    const s = w / layoutW;
-    const m = l.run.waterfall?.marks ?? {};
-    const box = (r: Rect, color: string, label: string, dashed = false) => {
-      if (r.top * s > h) return;
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      if (dashed) ctx.setLineDash([8, 6]);
-      ctx.strokeRect(x + r.left * s, y + r.top * s, Math.min(r.width * s, w - r.left * s), Math.min(r.height * s, h - r.top * s));
-      ctx.setLineDash([]);
-      ctx.fillStyle = color;
-      ctx.font = `700 12px ${FONT}`;
-      const tw = ctx.measureText(label).width + 10;
-      ctx.fillRect(x + r.left * s, Math.max(y, y + r.top * s - 18), tw, 18);
-      ctx.fillStyle = "#fff";
-      ctx.fillText(label, x + r.left * s + 5, Math.max(y, y + r.top * s - 18) + 13);
-      ctx.restore();
-    };
-    if (l.lcpRect && m.lcp && t >= m.lcp) box(l.lcpRect, C.serp, "LCP");
-    if (m.load && t >= m.load) l.shifted.forEach((r) => box(r, C.fail, "Moved", true));
-    ctx.restore();
-    ctx.strokeStyle = C.rule;
-    ctx.lineWidth = 2;
-    roundRect(ctx, x, y, w, h, 12);
-    ctx.stroke();
-  });
+      if (isPhone) drawPhone(ctx, l, t, cx, top + 18, deviceH, 300);
+      else drawBrowser(ctx, l, t, cx, top + 18 + 80, deviceH - 80, 400);
+    });
+  } else if (lead.run.strategy === "mobile") drawPhone(ctx, lead, t, areaRight / 2, top, deviceH, 400);
+  else drawBrowser(ctx, lead, t, areaRight / 2, top + 6, deviceH, 740);
 
   // Panel
-  const px = panelX + 10;
+  const px = 860;
+  const pw = W - px - 32;
   ctx.textAlign = "left";
-  ctx.fillStyle = C.soft;
-  ctx.font = `500 15px ${FONT}`;
-  ctx.fillText("Page load replay", px, 70);
-  let url = lanes[0].run.finalUrl.replace(/^https?:\/\//, "");
-  ctx.font = `500 15px ${FONT}`;
-  while (ctx.measureText(url).width > 350 && url.length > 10) url = url.slice(0, -2);
+  // status pill
+  ctx.font = `600 14px ${FONT}`;
+  const pillW = ctx.measureText(phase.label).width + 34;
+  ctx.fillStyle = phase.color;
+  ctx.globalAlpha = 0.12;
+  roundRect(ctx, px, 92, pillW, 28, 14);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = phase.color;
+  ctx.beginPath();
+  ctx.arc(px + 15, 106, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillText(phase.label, px + 26, 111);
+  // clock
   ctx.fillStyle = C.ink;
-  ctx.fillText(url === lanes[0].run.finalUrl.replace(/^https?:\/\//, "") ? url : `${url}…`, px, 94);
-  ctx.font = `600 64px ${FONT}`;
-  ctx.fillText(`${(t / 1000).toFixed(1)} s`, px, 170);
+  ctx.font = `700 76px ${FONT}`;
+  ctx.fillText((t / 1000).toFixed(1), px - 3, 196);
+  const cw = ctx.measureText((t / 1000).toFixed(1)).width;
+  ctx.font = `600 30px ${FONT}`;
+  ctx.fillStyle = C.soft;
+  ctx.fillText("s", px + cw + 6, 196);
 
-  let y = 215;
+  let y = 226;
   lanes.forEach((l) => {
     const m = l.run.waterfall?.marks ?? {};
-    if (lanes.length > 1) {
+    if (compare) {
       ctx.fillStyle = C.ink;
-      ctx.font = `600 15px ${FONT}`;
-      ctx.fillText(l.label, px, y);
-      y += 24;
+      ctx.font = `700 14px ${FONT}`;
+      ctx.fillText(l.label, px, y + 4);
+      y += 14;
     }
-    const steps: [string, number | undefined][] = [
-      ["First content (FCP)", m.fcp],
-      ["Main content (LCP)", m.lcp],
-      ["Fully loaded", m.load],
+    const chips: [string, string, number | undefined][] = [
+      ["First content", "FCP", m.fcp],
+      ["Main content (LCP)", "LCP", m.lcp],
+      ["Fully loaded", "Loaded", m.load],
     ];
-    for (const [name, at] of steps) {
-      const reached = typeof at === "number" && t >= at;
-      ctx.fillStyle = reached ? C.pass : C.rule;
-      ctx.beginPath();
-      ctx.arc(px + 8, y - 5, 8, 0, Math.PI * 2);
-      ctx.fill();
-      if (reached) {
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(px + 4, y - 5);
-        ctx.lineTo(px + 7, y - 2);
-        ctx.lineTo(px + 12, y - 9);
+    if (compare) {
+      // one compact row of three chips per device
+      const cw2 = (pw - 16) / 3;
+      chips.forEach(([, short, at], k) => {
+        const reached = typeof at === "number" && t >= at;
+        const cx2 = px + k * (cw2 + 8);
+        ctx.fillStyle = reached ? "rgba(11,138,87,0.10)" : "#fff";
+        roundRect(ctx, cx2, y, cw2, 46, 10);
+        ctx.fill();
+        ctx.strokeStyle = reached ? "rgba(11,138,87,0.35)" : C.rule;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.fillStyle = reached ? C.pass : C.soft;
+        ctx.font = `600 12px ${FONT}`;
+        ctx.fillText(`${reached ? "✓ " : ""}${short}`, cx2 + 10, y + 18);
+        ctx.fillStyle = reached ? C.ink : C.soft;
+        ctx.font = `700 15px ${FONT}`;
+        ctx.fillText(typeof at === "number" ? formatMs(at) : "–", cx2 + 10, y + 37);
+      });
+      y += 54;
+    } else
+      for (const [name, , at] of chips) {
+        const reached = typeof at === "number" && t >= at;
+        ctx.fillStyle = reached ? "rgba(11,138,87,0.10)" : "#fff";
+        roundRect(ctx, px, y, pw, 36, 10);
+        ctx.fill();
+        ctx.strokeStyle = reached ? "rgba(11,138,87,0.35)" : C.rule;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        const cy = y + 18;
+        ctx.fillStyle = reached ? C.pass : C.rule;
+        ctx.beginPath();
+        ctx.arc(px + 18, cy, 8, 0, Math.PI * 2);
+        ctx.fill();
+        if (reached) {
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(px + 14, cy);
+          ctx.lineTo(px + 17, cy + 3);
+          ctx.lineTo(px + 22, cy - 3);
+          ctx.stroke();
+        }
+        ctx.fillStyle = reached ? C.ink : C.soft;
+        ctx.font = `${reached ? 600 : 500} 15px ${FONT}`;
+        ctx.fillText(name, px + 34, cy + 5);
+        if (typeof at === "number") {
+          ctx.textAlign = "right";
+          ctx.fillText(formatMs(at), px + pw - 12, cy + 5);
+          ctx.textAlign = "left";
+        }
+        y += 44;
       }
-      ctx.fillStyle = reached ? C.ink : C.soft;
-      ctx.font = `${reached ? 600 : 500} 16px ${FONT}`;
-      ctx.fillText(name, px + 26, y);
-      if (typeof at === "number") {
-        ctx.textAlign = "right";
-        ctx.fillText(formatMs(at), W - 40, y);
-        ctx.textAlign = "left";
-      }
-      y += 28;
-    }
+    // download progress
     const n = network(l, t);
+    const frac = n.total ? n.done / n.total : 0;
+    ctx.fillStyle = C.rule;
+    roundRect(ctx, px, y + 2, pw, 6, 3);
+    ctx.fill();
+    ctx.fillStyle = phaseAt(l, t).color;
+    roundRect(ctx, px, y + 2, Math.max(6, pw * frac), 6, 3);
+    ctx.fill();
     ctx.fillStyle = C.soft;
-    ctx.font = `500 14px ${FONT}`;
-    ctx.fillText(`${n.flight} file${n.flight === 1 ? "" : "s"} loading, ${formatBytes(n.done)} of ${formatBytes(n.total)}`, px, y);
-    y += lanes.length > 1 ? 34 : 40;
+    ctx.font = `500 13px ${FONT}`;
+    ctx.fillText(`${formatBytes(n.done)} of ${formatBytes(n.total)} downloaded${n.flight ? `, ${n.flight} file${n.flight === 1 ? "" : "s"} in progress` : ""}`, px, y + 26);
+    y += compare ? 40 : 48;
   });
 
-  // Caption, in a box sized to its text
-  if (lanes.length > 1) {
-    ctx.font = `500 14px ${FONT}`;
-    const blocks = lanes.map((l) => lines(ctx, caption(l, t), 340, 2));
-    const hBox = blocks.reduce((sum, b) => sum + 22 + b.length * 18 + 10, 16);
-    ctx.fillStyle = C.mist;
-    roundRect(ctx, px - 10, y - 4, 370, hBox, 12);
-    ctx.fill();
-    let cy = y + 20;
-    lanes.forEach((l, k) => {
+  // caption bubble
+  ctx.font = `500 ${compare ? 14 : 17}px ${FONT}`;
+  const blocks = lanes.map((l) => lines(ctx, caption(l, t), pw - 28, compare ? 2 : 4));
+  const lh = compare ? 18 : 23;
+  const hBox = 34 + blocks.reduce((sum, b) => sum + b.length * lh + (compare ? 22 : 4), 0);
+  const maxY = compare ? 612 : 520;
+  const by = Math.min(y, maxY - hBox);
+  ctx.fillStyle = "#fff";
+  roundRect(ctx, px, by, pw, hBox, 14);
+  ctx.fill();
+  ctx.fillStyle = phase.color;
+  roundRect(ctx, px, by, 5, hBox, 2.5);
+  ctx.fill();
+  ctx.fillStyle = C.soft;
+  ctx.font = `600 12px ${FONT}`;
+  ctx.fillText("What's happening", px + 18, by + 22);
+  let cy = by + 46;
+  lanes.forEach((l, k) => {
+    if (compare) {
       ctx.fillStyle = C.ink;
-      ctx.font = `600 14px ${FONT}`;
-      ctx.fillText(l.label, px + 4, cy);
-      ctx.font = `500 14px ${FONT}`;
-      blocks[k].forEach((ln, j) => ctx.fillText(ln, px + 4, cy + 20 + j * 18));
-      cy += 22 + blocks[k].length * 18 + 10;
-    });
-  } else {
-    ctx.font = `500 17px ${FONT}`;
-    const ls = lines(ctx, caption(lanes[0], t), 340, 5);
-    ctx.fillStyle = C.mist;
-    roundRect(ctx, px - 10, y - 4, 370, 28 + ls.length * 24, 12);
-    ctx.fill();
+      ctx.font = `700 13px ${FONT}`;
+      ctx.fillText(l.label, px + 18, cy);
+      cy += 18;
+    }
     ctx.fillStyle = C.ink;
-    ls.forEach((ln, j) => ctx.fillText(ln, px + 4, y + 22 + j * 24));
+    ctx.font = `500 ${compare ? 14 : 17}px ${FONT}`;
+    blocks[k].forEach((ln, j) => ctx.fillText(ln, px + 18, cy + j * lh));
+    cy += blocks[k].length * lh + (compare ? 8 : 0);
+  });
+
+  // Filmstrip (single device)
+  if (!compare && lead.frames.length) {
+    const fy = 540;
+    const fh = 70;
+    const sample = lead.frames[0].img;
+    const fw = Math.min(110, fh * (sample.naturalWidth / sample.naturalHeight));
+    const gap = 10;
+    const stripW = lead.frames.length * fw + (lead.frames.length - 1) * gap;
+    const sx = Math.max(32, (areaRight + 40 - stripW) / 2);
+    const current = lead.frames.reduce((k, f, i) => (f.t <= t ? i : k), -1);
+    lead.frames.forEach((f, i) => {
+      const fx = sx + i * (fw + gap);
+      ctx.save();
+      ctx.globalAlpha = f.t <= t ? 1 : 0.35;
+      roundRect(ctx, fx, fy, fw, fh, 6);
+      ctx.clip();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(fx, fy, fw, fh);
+      ctx.drawImage(f.img, fx, fy, fw, (f.img.naturalHeight / f.img.naturalWidth) * fw);
+      ctx.restore();
+      ctx.strokeStyle = i === current ? phase.color : C.rule;
+      ctx.lineWidth = i === current ? 3 : 1;
+      roundRect(ctx, fx, fy, fw, fh, 6);
+      ctx.stroke();
+      ctx.fillStyle = i === current ? C.ink : C.soft;
+      ctx.font = `${i === current ? 700 : 500} 11px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText(formatMs(f.t), fx + fw / 2, fy + fh + 14);
+      ctx.textAlign = "left";
+    });
   }
 
-  // Timeline
-  const tx = 40;
-  const tw = W - 80;
-  const ty = H - 34;
-  ctx.fillStyle = C.rule;
-  roundRect(ctx, tx, ty, tw, 6, 3);
-  ctx.fill();
+  // Timeline coloured by phase
+  const tx = 32;
+  const twd = W - 64;
+  const ty = H - 62;
+  const m0 = lead.run.waterfall?.marks ?? {};
+  const xAt = (v: number) => tx + (Math.min(v, total) / total) * twd;
+  const segs: [number, number, string][] = [];
+  const b1 = m0.fcp ?? 0;
+  const b2 = Math.max(b1, m0.lcp ?? b1);
+  const b3 = Math.max(b2, m0.load ?? b2);
+  segs.push([0, b1, C.warn], [b1, b2, C.serp], [b2, b3, "#6F8CFF"], [b3, total, C.pass]);
+  for (const [a0, a1, col] of segs) {
+    if (a1 <= a0) continue;
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.22;
+    ctx.fillRect(xAt(a0), ty, xAt(a1) - xAt(a0), 10);
+    ctx.globalAlpha = 1;
+    if (t > a0) ctx.fillRect(xAt(a0), ty, xAt(Math.min(t, a1)) - xAt(a0), 10);
+  }
+  // playhead
   ctx.fillStyle = C.ink;
-  roundRect(ctx, tx, ty, Math.max(6, (Math.min(t, total) / total) * tw), 6, 3);
+  ctx.beginPath();
+  ctx.arc(xAt(t), ty + 5, 8, 0, Math.PI * 2);
   ctx.fill();
-  const m0 = lanes[0].run.waterfall?.marks ?? {};
-  ctx.font = `700 11px ${FONT}`;
-  ctx.textAlign = "center";
-  // Markers; ones that land within a few pixels share a label ("FCP + LCP").
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(xAt(t), ty + 5, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // markers, merged when they land together
   const marks: [string, number, string][] = [];
   if (typeof m0.fcp === "number") marks.push(["FCP", m0.fcp, C.serp]);
   if (typeof m0.lcp === "number") marks.push(["LCP", m0.lcp, C.fail]);
-  if (typeof m0.load === "number") marks.push(["Load", m0.load, C.soft]);
+  if (typeof m0.load === "number") marks.push(["Loaded", m0.load, C.pass]);
   const groups: { x: number; label: string; color: string }[] = [];
   for (const [k, v, col] of marks) {
-    const mx = tx + (v / total) * tw;
-    ctx.fillStyle = col;
-    ctx.fillRect(mx - 1, ty - 6, 2, 18);
-    const near = groups.find((g) => Math.abs(g.x - mx) < 36);
+    const mx = xAt(v);
+    const near = groups.find((gr) => Math.abs(gr.x - mx) < 44);
     if (near) near.label += ` + ${k}`;
     else groups.push({ x: mx, label: k, color: col });
   }
-  for (const g of groups) {
-    ctx.fillStyle = g.color;
-    ctx.fillText(g.label, g.x, ty - 10);
+  ctx.font = `700 12px ${FONT}`;
+  ctx.textAlign = "center";
+  for (const gr of groups) {
+    ctx.fillStyle = gr.color;
+    ctx.fillRect(gr.x - 1, ty - 4, 2, 18);
+    ctx.fillText(gr.label, gr.x, ty + 30);
   }
   ctx.textAlign = "right";
-  ctx.fillStyle = C.soft;
-  ctx.font = `500 12px ${FONT}`;
-  ctx.fillText("neetshah.com Page Speed Test · from Google Lighthouse snapshots", W - 40, H - 8);
+  // call to action
+  ctx.font = `600 13px ${FONT}`;
+  ctx.fillStyle = C.ink;
+  ctx.fillText("Test yours free at neetshah.com/tools/page-speed-test", W - 32, H - 8);
   ctx.textAlign = "left";
 }
 
